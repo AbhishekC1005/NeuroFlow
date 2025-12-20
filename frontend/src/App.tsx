@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { Routes, Route, useNavigate } from 'react-router-dom';
 import ReactFlow, {
   ReactFlowProvider,
   addEdge,
@@ -18,6 +19,7 @@ import { Toaster, toast } from 'sonner';
 
 import Sidebar from './components/Sidebar';
 import ChatPanel from './components/ChatPanel';
+import LandingPage from './components/LandingPage';
 import DatasetNode from './components/nodes/DatasetNode';
 import PreprocessingNode from './components/nodes/PreprocessingNode';
 import ImputationNode from './components/nodes/ImputationNode';
@@ -49,7 +51,7 @@ const initialNodes: Node[] = [
 
 const getId = () => `dndnode_${Math.random().toString(36).substr(2, 9)}`;
 
-function App() {
+function Workspace() {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -501,6 +503,22 @@ function App() {
       </div>
       <Toaster position="top-right" richColors theme="dark" />
     </div>
+  );
+}
+
+// Landing Page wrapper with navigation
+function LandingPageWrapper() {
+  const navigate = useNavigate();
+  return <LandingPage onEnterWorkspace={() => navigate('/workspace')} />;
+}
+
+// Main App with Routes
+function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<LandingPageWrapper />} />
+      <Route path="/workspace" element={<Workspace />} />
+    </Routes>
   );
 }
 
