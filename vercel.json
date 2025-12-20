@@ -2,12 +2,12 @@
     "rewrites": [
         {
             "source": "/(.*)",
-            "destination": "/backend/main.py"
+            "destination": "/backend/app.py"
         }
     ],
     "builds": [
         {
-            "src": "backend/main.py",
+            "src": "backend/app.py",
             "use": "@vercel/python"
         }
     ]
