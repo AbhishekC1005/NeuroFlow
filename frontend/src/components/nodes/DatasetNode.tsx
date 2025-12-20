@@ -42,27 +42,27 @@ export default function DatasetNode({ data, id, selected }: any) {
     };
 
     return (
-        <div className={`bg-white rounded-xl shadow-lg border-2 border-[#4285F4] w-64 overflow-hidden transition-all group ${selected ? 'ring-2 ring-offset-2 ring-[#4285F4] shadow-[0_0_20px_rgba(66,133,244,0.4)]' : 'hover:shadow-[#4285F4]/20'}`}>
-            <div className="bg-[#4285F4] px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-white/20 rounded-md text-white">
-                        <Upload size={14} />
+        <div className={`bg-white rounded-xl shadow-lg border-2 border-[#4285F4] w-80 overflow-hidden transition-all group ${selected ? 'ring-2 ring-offset-2 ring-[#4285F4] shadow-[0_0_20px_rgba(66,133,244,0.4)]' : 'hover:shadow-[#4285F4]/20'}`}>
+            <div className="bg-[#4285F4] px-5 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-white/20 rounded-lg text-white">
+                        <Upload size={18} />
                     </div>
-                    <span className="font-semibold text-white text-sm">Dataset Input</span>
+                    <span className="font-semibold text-white text-base">Dataset Input</span>
                 </div>
                 <button
                     onClick={() => data.onDelete(id)}
-                    className="text-white/70 hover:text-white transition-colors p-1 rounded hover:bg-white/20"
+                    className="text-white/70 hover:text-white transition-colors p-1.5 rounded hover:bg-white/20"
                 >
-                    <Trash2 size={14} />
+                    <Trash2 size={18} />
                 </button>
             </div>
 
-            <div className="p-4 space-y-3">
+            <div className="p-5 space-y-4">
                 <div>
-                    <label className="flex items-center justify-center gap-2 w-full py-2 cursor-pointer bg-slate-50 hover:bg-slate-100 border border-slate-200 border-dashed rounded-lg transition-all group-hover:border-[#4285F4]/50">
-                        <Upload size={14} className="text-slate-500 group-hover:text-[#4285F4] transition-colors" />
-                        <span className="text-xs text-slate-600 group-hover:text-slate-900 truncate max-w-[180px] font-medium">
+                    <label className="flex items-center justify-center gap-3 w-full py-3 cursor-pointer bg-slate-50 hover:bg-slate-100 border border-slate-200 border-dashed rounded-lg transition-all group-hover:border-[#4285F4]/50">
+                        <Upload size={18} className="text-slate-500 group-hover:text-[#4285F4] transition-colors" />
+                        <span className="text-sm text-slate-600 group-hover:text-slate-900 truncate max-w-[200px] font-medium">
                             {data.file || "Upload CSV/Excel"}
                         </span>
                         <input type="file" className="hidden" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} />
@@ -70,7 +70,7 @@ export default function DatasetNode({ data, id, selected }: any) {
                 </div>
 
                 {data.shape && (
-                    <div className="flex items-center justify-between text-xs bg-slate-50 p-2 rounded border border-slate-200">
+                    <div className="flex items-center justify-between text-sm bg-slate-50 p-3 rounded-lg border border-slate-200">
                         <span className="text-slate-500">Dimensions:</span>
                         <span className="font-mono font-medium text-slate-700">{data.shape[0]} rows × {data.shape[1]} cols</span>
                     </div>
@@ -126,7 +126,7 @@ export default function DatasetNode({ data, id, selected }: any) {
                 <Handle
                     type="source"
                     position={Position.Right}
-                    className="!w-3 !h-3 !bg-[#4285F4] !border-2 !border-white !rounded-full cursor-crosshair"
+                    className="!w-4 !h-4 !bg-[#4285F4] !border-2 !border-white !rounded-full cursor-crosshair"
                 />
             </div>
         </div>

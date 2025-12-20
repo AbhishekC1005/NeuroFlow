@@ -88,6 +88,30 @@ function Workspace() {
     };
   }, [resize, stopResizing]);
 
+  // Keep-alive ping to backend every 3 minutes to prevent Render cold starts
+  useEffect(() => {
+    const BASE_URL = import.meta.env.VITE_API_URL || 'https://neuroflow-489y.onrender.com';
+    let timeoutId: NodeJS.Timeout;
+
+    const pingBackend = async () => {
+      try {
+        await axios.get(`${BASE_URL}/`);
+        console.log('Keep-alive ping successful');
+      } catch (error) {
+        console.log('Keep-alive ping failed (server may be waking up)');
+      }
+      // After request completes (success or fail), wait 3 minutes then ping again
+      timeoutId = setTimeout(pingBackend, 3 * 60 * 1000); // 3 minutes
+    };
+
+    // Initial ping after 1 second
+    timeoutId = setTimeout(pingBackend, 1000);
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, []);
+
   // Update node data handler with Column Sync
   const onNodeDataChange = useCallback((id: string, newData: any) => {
     setNodes((nds) => {
@@ -378,11 +402,11 @@ function Workspace() {
               </div>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-[#202124] tracking-tight flex items-center gap-0.5">
+              <h1 className="text-xl font-medium text-gray-800 tracking-tight flex items-center gap-0.5">
                 <span className="text-[#4285F4]">Flow</span>
                 <span className="text-[#34A853]">ML</span>
               </h1>
-              <div className="text-[10px] font-medium text-gray-500 tracking-widest uppercase">AI Pipeline Orchestrator</div>
+              <div className="text-xs text-gray-500">Visual ML Pipeline Builder</div>
             </div>
           </div>
         </div>
@@ -391,7 +415,7 @@ function Workspace() {
           <button
             onClick={runPipeline}
             disabled={isRunning}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-white font-medium transition-all shadow-md ${isRunning
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-white font-medium transition-all shadow-md ${isRunning
               ? 'bg-gray-100 cursor-not-allowed text-gray-400 shadow-none'
               : 'bg-[#1a73e8] hover:bg-[#1557b0] hover:shadow-lg active:shadow-md'
               }`}
@@ -415,9 +439,9 @@ function Workspace() {
       <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-white py-0.5 overflow-hidden relative shrink-0">
         <div className="animate-marquee whitespace-nowrap flex items-center gap-8">
           {[...Array(4)].map((_, i) => (
-            <span key={i} className="flex items-center gap-1.5 text-xs font-medium">
+            <span key={i} className="flex items-center gap-2 text-sm">
               <span className="inline-block w-2 h-2 bg-white rounded-full animate-pulse"></span>
-              ⚡ Backend is deployed on Render (Free Tier) — Initial requests may take 30-60 seconds to respond while the server wakes up. Thank you for your patience!
+              ⚡ Backend is deployed on Render (Free Tier) — Initial requests may take 30-60 seconds. Thank you for your patience!
             </span>
           ))}
         </div>
@@ -426,7 +450,7 @@ function Workspace() {
       <div className="flex flex-1 overflow-hidden h-[calc(100vh-64px-32px)] relative">
         <ReactFlowProvider>
           {/* Sidebar Area */}
-          <div className={`transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-72' : 'w-0'} flex flex-col border-r border-gray-200 relative z-10 overflow-hidden bg-white shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)]`}>
+          <div className={`transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-80' : 'w-0'} flex flex-col border-r border-gray-100 relative z-10 overflow-hidden bg-white`}>
             <Sidebar onClose={() => setIsSidebarOpen(false)} />
           </div>
 

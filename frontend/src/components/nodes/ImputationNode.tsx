@@ -8,7 +8,7 @@ export default function ImputationNode({ data, id, selected }: any) {
     };
 
     return (
-        <div className={`bg-white rounded-xl shadow-lg border-2 border-[#F97316] w-56 overflow-hidden transition-all group ${selected ? 'ring-2 ring-offset-2 ring-[#F97316] shadow-[0_0_20px_rgba(249,115,22,0.4)]' : 'hover:shadow-[#F97316]/20'}`}>
+        <div className={`bg-white rounded-xl shadow-lg border-2 border-[#F97316] w-72 overflow-hidden transition-all group ${selected ? 'ring-2 ring-offset-2 ring-[#F97316] shadow-[0_0_20px_rgba(249,115,22,0.4)]' : 'hover:shadow-[#F97316]/20'}`}>
             {/* Custom Target Handle (Left) */}
             <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 z-50 flex items-center justify-center w-8 h-8">
                 {/* Interactive Handle */}
@@ -26,18 +26,18 @@ export default function ImputationNode({ data, id, selected }: any) {
                 </div>
             </div>
 
-            <div className="bg-[#F97316] px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-white/20 rounded-md text-white">
-                        <Pipette size={14} />
+            <div className="bg-[#F97316] px-5 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-white/20 rounded-lg text-white">
+                        <Pipette size={18} />
                     </div>
-                    <span className="font-semibold text-white text-sm">Missing Value Imputation</span>
+                    <span className="font-semibold text-white text-base">Missing Values</span>
                 </div>
                 <button
                     onClick={() => data.onDelete(id)}
-                    className="text-white/70 hover:text-white transition-colors p-1 rounded hover:bg-white/20"
+                    className="text-white/70 hover:text-white transition-colors p-1.5 rounded hover:bg-white/20"
                 >
-                    <Trash2 size={14} />
+                    <Trash2 size={18} />
                 </button>
             </div>
 

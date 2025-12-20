@@ -5,7 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 export default function ResultNode({ data, id, selected }: any) {
     return (
-        <div className={`bg-white rounded-xl shadow-lg border-2 border-[#34A853] w-72 overflow-hidden transition-all group ${selected ? 'ring-2 ring-offset-2 ring-[#34A853] shadow-[0_0_20px_rgba(52,168,83,0.4)]' : 'hover:shadow-[#34A853]/20'}`}>
+        <div className={`bg-white rounded-xl shadow-lg border-2 border-[#34A853] w-96 overflow-hidden transition-all group ${selected ? 'ring-2 ring-offset-2 ring-[#34A853] shadow-[0_0_20px_rgba(52,168,83,0.4)]' : 'hover:shadow-[#34A853]/20'}`}>
             {/* Custom Target Handle (Left) */}
             <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 z-50 flex items-center justify-center w-8 h-8">
                 <Handle
@@ -21,22 +21,22 @@ export default function ResultNode({ data, id, selected }: any) {
                 </div>
             </div>
 
-            <div className="bg-[#34A853] px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-white/20 rounded-md text-white">
-                        <BarChart3 size={14} />
+            <div className="bg-[#34A853] px-5 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-white/20 rounded-lg text-white">
+                        <BarChart3 size={18} />
                     </div>
-                    <span className="font-semibold text-white text-sm">Evaluation Results</span>
+                    <span className="font-semibold text-white text-base">Evaluation Results</span>
                 </div>
                 <button
                     onClick={() => data.onDelete(id)}
-                    className="text-white/70 hover:text-white transition-colors p-1 rounded hover:bg-white/20"
+                    className="text-white/70 hover:text-white transition-colors p-1.5 rounded hover:bg-white/20"
                 >
-                    <Trash2 size={14} />
+                    <Trash2 size={18} />
                 </button>
             </div>
 
-            <div className="p-4 space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar">
+            <div className="p-5 space-y-5 max-h-[550px] overflow-y-auto custom-scrollbar">
                 {(data.accuracy !== undefined || data.r2_score !== undefined) ? (
                     <>
                         {/* Metrics Section */}

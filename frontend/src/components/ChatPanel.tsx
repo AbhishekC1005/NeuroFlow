@@ -121,24 +121,24 @@ export default function ChatPanel({ onClose, nodes, edges }: ChatPanelProps) {
     };
 
     return (
-        <aside className="w-full h-full bg-white flex flex-col shadow-lg z-10 relative border-l border-gray-200">
+        <aside className="w-full h-full bg-white flex flex-col z-10 relative border-l border-gray-100">
             {/* Header */}
-            <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-slate-200">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    <div className="p-2 bg-[#4285F4]/10 rounded-lg border border-[#4285F4]/10">
-                        <Bot size={18} className="text-[#4285F4]" />
+                    <div className="w-11 h-11 rounded-xl bg-[#4285F4]/10 flex items-center justify-center">
+                        <Bot size={20} className="text-[#4285F4]" />
                     </div>
                     <div>
-                        <h2 className="text-sm font-bold text-[#202124]">FlowML Assistant</h2>
+                        <h2 className="text-lg font-medium text-gray-900">AI Assistant</h2>
                         <div className="flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 bg-[#34A853] rounded-full animate-pulse" />
-                            <span className="text-[10px] text-gray-500 font-medium">Online</span>
+                            <span className="w-2 h-2 bg-[#34A853] rounded-full animate-pulse" />
+                            <span className="text-xs text-gray-500">Online</span>
                         </div>
                     </div>
                 </div>
                 <button
                     onClick={onClose}
-                    className="text-gray-500 hover:text-[#202124] hover:bg-gray-100 p-1.5 rounded-lg transition-all"
+                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all"
                     title="Close Chat"
                 >
                     <PanelRightClose size={18} />
@@ -146,7 +146,7 @@ export default function ChatPanel({ onClose, nodes, edges }: ChatPanelProps) {
             </div>
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-white">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 sidebar-scrollbar bg-gray-50">
                 {messages.map((msg) => (
                     <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
                         <div className="w-8 h-8 rounded-full bg-[#F1F3F4] flex items-center justify-center shrink-0 border border-gray-100">
@@ -217,7 +217,7 @@ export default function ChatPanel({ onClose, nodes, edges }: ChatPanelProps) {
                         onKeyDown={handleKeyDown}
                         placeholder={isProcessing ? "Waiting for response..." : "Ask anything about your pipeline..."}
                         disabled={isProcessing}
-                        className="w-full bg-[#F1F3F4] border border-transparent rounded-xl py-3 pl-4 pr-12 text-xs text-[#202124] placeholder:text-gray-500 focus:outline-none focus:bg-white focus:border-[#4285F4] focus:ring-2 focus:ring-[#4285F4]/20 transition-all shadow-inner disabled:opacity-50 disabled:cursor-wait"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-full py-3 pl-5 pr-12 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-[#4285F4] focus:ring-2 focus:ring-[#4285F4]/20 transition-all disabled:opacity-50 disabled:cursor-wait"
                     />
                     <button
                         onClick={handleSend}
