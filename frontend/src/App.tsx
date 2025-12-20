@@ -332,7 +332,8 @@ function App() {
 
       if (Object.keys(batchPayload).length === 0) throw new Error("No valid pipeline paths found. Connect Dataset -> Model -> Result.");
 
-      const response = await axios.post('http://localhost:8000/run_pipeline_batch', batchPayload);
+      const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const response = await axios.post(`${BASE_URL}/run_pipeline_batch`, batchPayload);
       const results = response.data;
 
       // Distribute results back to nodes

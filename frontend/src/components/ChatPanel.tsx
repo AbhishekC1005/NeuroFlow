@@ -79,7 +79,8 @@ export default function ChatPanel({ onClose, nodes, edges }: ChatPanelProps) {
                 edges: edges.map(e => ({ source: e.source, target: e.target }))
             };
 
-            const response = await axios.post('http://localhost:8000/chat', {
+            const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            const response = await axios.post(`${BASE_URL}/chat`, {
                 workflow: workflowContext,
                 question: userMsg.text,
                 sample_data: sampleData

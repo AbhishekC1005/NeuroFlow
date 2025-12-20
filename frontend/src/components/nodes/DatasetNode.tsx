@@ -15,7 +15,8 @@ export default function DatasetNode({ data, id, selected }: any) {
         formData.append('file', file);
 
         try {
-            const response = await axios.post('http://localhost:8000/upload', formData);
+            const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            const response = await axios.post(`${BASE_URL}/upload`, formData);
             // Response: { id, preview, columns, shape }
             data.onChange(id, {
                 ...data,
