@@ -79,7 +79,7 @@ export default function ChatPanel({ onClose, nodes, edges }: ChatPanelProps) {
                 edges: edges.map(e => ({ source: e.source, target: e.target }))
             };
 
-            const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            const BASE_URL = import.meta.env.VITE_API_URL || 'https://neuroflow-489y.onrender.com';
             const response = await axios.post(`${BASE_URL}/chat`, {
                 workflow: workflowContext,
                 question: userMsg.text,

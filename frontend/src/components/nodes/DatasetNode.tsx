@@ -15,7 +15,7 @@ export default function DatasetNode({ data, id, selected }: any) {
         formData.append('file', file);
 
         try {
-            const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            const BASE_URL = import.meta.env.VITE_API_URL || 'https://neuroflow-489y.onrender.com';
             const response = await axios.post(`${BASE_URL}/upload`, formData);
             // Response: { id, preview, columns, shape }
             data.onChange(id, {
