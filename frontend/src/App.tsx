@@ -94,20 +94,24 @@ function Workspace() {
     let timeoutId: ReturnType<typeof setTimeout>;
 
     const pingBackend = async () => {
+      console.log(`[Keep-alive] Sending ping at ${new Date().toLocaleTimeString()}`);
       try {
         await axios.get(`${BASE_URL}/`);
-        console.log('Keep-alive ping successful');
+        console.log(`[Keep-alive] Ping successful at ${new Date().toLocaleTimeString()}`);
       } catch (error) {
-        console.log('Keep-alive ping failed (server may be waking up)');
+        console.log(`[Keep-alive] Ping failed at ${new Date().toLocaleTimeString()} (server may be waking up)`);
       }
-      // After request completes (success or fail), wait 3 minutes then ping again
-      timeoutId = setTimeout(pingBackend, 3 * 60 * 1000); // 3 minutes
+      // Schedule next ping after 3 minutes
+      console.log(`[Keep-alive] Next ping scheduled in 3 minutes`);
+      timeoutId = setTimeout(pingBackend, 3 * 60 * 1000);
     };
 
-    // Initial ping after 1 second
-    timeoutId = setTimeout(pingBackend, 1000);
+    // Initial ping after 2 seconds
+    console.log('[Keep-alive] Initializing - first ping in 2 seconds');
+    timeoutId = setTimeout(pingBackend, 2000);
 
     return () => {
+      console.log('[Keep-alive] Cleanup - clearing timeout');
       if (timeoutId) clearTimeout(timeoutId);
     };
   }, []);
