@@ -36,6 +36,10 @@ class ChatRequest(BaseModel):
     question: str
     sample_data: Optional[List[Dict[str, Any]]] = None
 
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to FlowML API", "status": "running"}
+
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     try:
