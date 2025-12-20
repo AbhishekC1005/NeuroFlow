@@ -91,7 +91,7 @@ function Workspace() {
   // Keep-alive ping to backend every 3 minutes to prevent Render cold starts
   useEffect(() => {
     const BASE_URL = import.meta.env.VITE_API_URL || 'https://neuroflow-489y.onrender.com';
-    let timeoutId: NodeJS.Timeout;
+    let timeoutId: ReturnType<typeof setTimeout>;
 
     const pingBackend = async () => {
       try {
