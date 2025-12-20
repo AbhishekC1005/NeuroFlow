@@ -1,32 +1,41 @@
-# Dependencies
-node_modules/
-venv/
-.venv/
-env/
-__pycache__/
-*.py[cod]
+# System Files
+.DS_Store
+Thumbs.db
+*.log
 
-# Build Outputs
-dist/
-build/
-*.so
-
-# Environment Variables
-.env
-.env.local
-.env.*.local
-
-# IDEs
-.vscode/
-.idea/
+# Editor
+.vscode
+.idea
 *.swp
 *.swo
 
-# OS
-.DS_Store
-Thumbs.db
+# Node (Frontend)
+frontend/node_modules
+frontend/dist
+frontend/build
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
 
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# Python (Backend)
+backend/__pycache__/
+backend/*.py[cod]
+backend/*$py.class
+backend/venv/
+backend/.venv/
+backend/env/
+backend/.env
+backend/temp_uploads/
+backend/db.sqlite3
+backend/*.db
+
+# Brain / Agent
+.gemini/
+.agent/
+brain/
+artifacts/

@@ -2,42 +2,48 @@ import React from 'react';
 import { Handle, Position } from 'reactflow';
 import { Settings, Trash2, Plus } from 'lucide-react';
 
-export default function PreprocessingNode({ data, id }: any) {
+export default function PreprocessingNode({ data, id, selected }: any) {
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     data.onChange(id, { ...data, scaler: e.target.value });
   };
 
   return (
-    <div className="bg-slate-900 rounded-xl shadow-lg border border-slate-700 w-64 overflow-hidden transition-all hover:shadow-yellow-500/20 hover:border-yellow-500/50 group">
-      {/* Custom Target Handle */}
-      <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 z-50">
+    <div className={`bg-white rounded-xl shadow-lg border-2 border-[#FBBC05] w-64 overflow-hidden transition-all group ${selected ? 'ring-2 ring-offset-2 ring-[#FBBC05] shadow-[0_0_20px_rgba(251,188,5,0.4)]' : 'hover:shadow-[#FBBC05]/20'}`}>
+      {/* Custom Target Handle (Left) */}
+      <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 z-50 flex items-center justify-center w-8 h-8">
         <Handle
           type="target"
           position={Position.Left}
-          className="!w-3 !h-3 !bg-yellow-500 !border-2 !border-slate-900 !rounded-full after:absolute after:-inset-4 after:content-[''] after:bg-transparent"
+          className="!w-8 !h-8 !opacity-0 !rounded-full !bg-transparent z-10 cursor-crosshair"
         />
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="w-3 h-3 bg-[#FBBC05] border-2 border-white rounded-full transition-all duration-300 group-hover:scale-0 group-hover:opacity-0 shadow-sm" />
+          <div className="absolute w-6 h-6 bg-[#FBBC05] rounded-full text-white flex items-center justify-center shadow-lg transform scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300">
+            <Plus size={14} strokeWidth={3} />
+          </div>
+        </div>
       </div>
 
-      <div className="bg-slate-800 px-4 py-3 border-b border-slate-700 flex items-center justify-between">
+      <div className="bg-[#FBBC05] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-yellow-500/10 rounded-md text-yellow-500">
+          <div className="p-1.5 bg-white/20 rounded-md text-white">
             <Settings size={14} />
           </div>
-          <span className="font-semibold text-slate-200 text-sm">Preprocessing</span>
+          <span className="font-semibold text-white text-sm">Preprocessing</span>
         </div>
         <button
           onClick={() => data.onDelete(id)}
-          className="text-slate-500 hover:text-red-500 transition-colors p-1 rounded hover:bg-slate-700/50"
+          className="text-white/70 hover:text-white transition-colors p-1 rounded hover:bg-white/20"
         >
           <Trash2 size={14} />
         </button>
       </div>
 
       <div className="p-4">
-        <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wide">Scaler Type</label>
+        <label className="block text-xs font-medium text-slate-500 mb-1.5 uppercase tracking-wide">Scaler Type</label>
         <div className="relative">
           <select
-            className="w-full appearance-none bg-slate-950 border border-slate-700 text-slate-300 text-sm rounded-lg focus:ring-yellow-500 focus:border-yellow-500 block p-2.5 outline-none transition-colors"
+            className="w-full appearance-none bg-slate-50 border border-gray-200 text-slate-700 text-sm rounded-lg focus:ring-[#FBBC05] focus:border-[#FBBC05] block p-2.5 outline-none transition-colors"
             onChange={handleChange}
             defaultValue={data.scaler || 'None'}
           >
@@ -51,15 +57,18 @@ export default function PreprocessingNode({ data, id }: any) {
         </div>
       </div>
 
-      {/* Custom Source Handle */}
-      <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-50">
+      {/* Custom Source Handle (Right) */}
+      <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-50 flex items-center justify-center w-8 h-8">
         <Handle
           type="source"
           position={Position.Right}
-          className="!w-3 !h-3 !bg-yellow-500 !border-2 !border-slate-900 !rounded-full cursor-crosshair after:absolute after:-inset-4 after:content-[''] after:bg-transparent"
+          className="!w-8 !h-8 !opacity-0 !rounded-full !bg-transparent z-10 cursor-crosshair"
         />
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-yellow-500 rounded-full text-white flex items-center justify-center shadow-lg transform scale-0 group-hover:scale-100 transition-transform pointer-events-none">
-          <Plus size={14} strokeWidth={3} />
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="w-3 h-3 bg-[#FBBC05] border-2 border-white rounded-full transition-all duration-300 group-hover:scale-0 group-hover:opacity-0 shadow-sm" />
+          <div className="absolute w-6 h-6 bg-[#FBBC05] rounded-full text-white flex items-center justify-center shadow-lg transform scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300">
+            <Plus size={14} strokeWidth={3} />
+          </div>
         </div>
       </div>
     </div>

@@ -6,22 +6,36 @@ import ReactFlow, {
   useEdgesState,
   Controls,
   Background,
+  ConnectionMode,
+  MarkerType,
 } from 'reactflow';
-import type { Connection, Node } from 'reactflow';
+import type {
+  Connection,
+  Edge,
+  Node,
+  ReactFlowInstance,
+} from 'reactflow';
 import 'reactflow/dist/style.css';
 import axios from 'axios';
-import { Play, PanelLeft, PanelRight, PanelLeftClose, PanelRightClose, LayoutGrid, MessageSquare } from 'lucide-react';
+import { Play, LayoutGrid, MessageSquare } from 'lucide-react';
+import { Toaster, toast } from 'sonner';
 
 import Sidebar from './components/Sidebar';
 import ChatPanel from './components/ChatPanel';
 import DatasetNode from './components/nodes/DatasetNode';
 import PreprocessingNode from './components/nodes/PreprocessingNode';
+import ImputationNode from './components/nodes/ImputationNode';
+import EncodingNode from './components/nodes/EncodingNode';
 import SplitNode from './components/nodes/SplitNode';
 import ModelNode from './components/nodes/ModelNode';
 import ResultNode from './components/nodes/ResultNode';
 
+import logo from './assets/image.png';
+
 const nodeTypes = {
   dataset: DatasetNode,
+  imputation: ImputationNode,
+  encoding: EncodingNode,
   preprocessing: PreprocessingNode,
   split: SplitNode,
   model: ModelNode,
@@ -37,8 +51,7 @@ const initialNodes: Node[] = [
   },
 ];
 
-let id = 0;
-const getId = () => `dndnode_${id++}`;
+const getId = () => `dndnode_${Math.random().toString(36).substr(2, 9)}`;
 
 function App() {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -48,39 +61,103 @@ function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(true);
+  const [chatWidth, setChatWidth] = useState(350);
+  const [isResizing, setIsResizing] = useState(false);
 
-  // Update node data handler
+  const startResizing = useCallback(() => {
+    setIsResizing(true);
+  }, []);
+
+  const stopResizing = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  const resize = useCallback((mouseMoveEvent: MouseEvent) => {
+    if (isResizing) {
+      const newWidth = window.innerWidth - mouseMoveEvent.clientX;
+      if (newWidth > 300 && newWidth < 800) {
+        setChatWidth(newWidth);
+      }
+    }
+  }, [isResizing]);
+
+  useEffect(() => {
+    window.addEventListener("mousemove", resize);
+    window.addEventListener("mouseup", stopResizing);
+    return () => {
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResizing);
+    };
+  }, [resize, stopResizing]);
+
+  // Update node data handler with Column Sync
   const onNodeDataChange = useCallback((id: string, newData: any) => {
-    setNodes((nds) =>
-      nds.map((node) => {
+    setNodes((nds) => {
+      const activeNode = nds.find(n => n.id === id);
+
+      // If updating a Dataset node and columns change, propagate to all Model nodes
+      if (activeNode?.type === 'dataset' && newData.columns && JSON.stringify(newData.columns) !== JSON.stringify(activeNode.data.columns)) {
+        return nds.map((node) => {
+          if (node.id === id) return { ...node, data: newData };
+          if (node.type === 'model') {
+            return { ...node, data: { ...node.data, columns: newData.columns } };
+          }
+          return node;
+        });
+      }
+
+      return nds.map((node) => {
         if (node.id === id) {
           return { ...node, data: newData };
         }
         return node;
-      })
-    );
+      });
+    });
   }, [setNodes]);
 
-  // Propagate columns from Dataset to Model nodes
+
+
+  // Sync edge colors with source node types
   useEffect(() => {
-    const datasetNode = nodes.find((n) => n.type === 'dataset');
-    if (datasetNode && datasetNode.data.columns) {
-      setNodes((nds) =>
-        nds.map((node) => {
-          if (node.type === 'model') {
-            // Only update if columns are different to avoid infinite loop
-            if (JSON.stringify(node.data.columns) !== JSON.stringify(datasetNode.data.columns)) {
-              return {
-                ...node,
-                data: { ...node.data, columns: datasetNode.data.columns },
-              };
-            }
+    setEdges((eds) =>
+      eds.map((edge) => {
+        const sourceNode = nodes.find((n) => n.id === edge.source);
+        if (sourceNode) {
+          let newStroke = '#64748b';
+          switch (sourceNode.type) {
+            case 'dataset':
+              newStroke = '#06b6d4'; // cyan-500
+              break;
+            case 'imputation':
+              newStroke = '#F97316'; // orange-500
+              break;
+            case 'encoding':
+              newStroke = '#8B5CF6'; // violet-500
+              break;
+            case 'preprocessing':
+              newStroke = '#eab308'; // yellow-500
+              break;
+            case 'split':
+              newStroke = '#d946ef'; // fuchsia-500
+              break;
+            case 'model':
+              newStroke = '#f43f5e'; // rose-500
+              break;
+            case 'result':
+              newStroke = '#10b981'; // emerald-500
+              break;
           }
-          return node;
-        })
-      );
-    }
-  }, [nodes, setNodes]);
+          if (edge.style?.stroke !== newStroke) {
+            return {
+              ...edge,
+              style: { ...edge.style, stroke: newStroke, strokeWidth: 2 },
+            };
+          }
+        }
+        return edge;
+      })
+    );
+  }, [nodes, setEdges]);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -90,16 +167,22 @@ function App() {
       if (sourceNode) {
         switch (sourceNode.type) {
           case 'dataset':
-            stroke = '#3b82f6'; // blue-500
+            stroke = '#06b6d4'; // cyan-500
+            break;
+          case 'imputation':
+            stroke = '#F97316'; // orange-500
+            break;
+          case 'encoding':
+            stroke = '#8B5CF6'; // violet-500
             break;
           case 'preprocessing':
             stroke = '#eab308'; // yellow-500
             break;
           case 'split':
-            stroke = '#a855f7'; // purple-500
+            stroke = '#d946ef'; // fuchsia-500
             break;
           case 'model':
-            stroke = '#06b6d4'; // cyan-500
+            stroke = '#f43f5e'; // rose-500
             break;
           case 'result':
             stroke = '#10b981'; // emerald-500
@@ -113,7 +196,12 @@ function App() {
         style: { stroke, strokeWidth: 2 },
       };
 
-      setEdges((eds) => addEdge(edge, eds));
+      setEdges((eds) => {
+        // Enforce single input connection for ALL nodes:
+        // Remove any existing edges that target the same node (and same handle if applicable, but usually 1 input handle)
+        const filtered = eds.filter((e) => e.target !== params.target);
+        return addEdge(edge, filtered);
+      });
     },
     [nodes, setEdges],
   );
@@ -141,11 +229,20 @@ function App() {
         y: event.clientY - reactFlowWrapper.current!.getBoundingClientRect().top,
       });
 
+      // Pre-fill columns if adding a Model node
+      let initialData: any = { label: `${type} node`, onChange: onNodeDataChange, onDelete: onNodeDelete };
+      if (type === 'model') {
+        const datasetNode = nodes.find(n => n.type === 'dataset');
+        if (datasetNode?.data.columns) {
+          initialData = { ...initialData, columns: datasetNode.data.columns };
+        }
+      }
+
       const newNode: Node = {
         id: getId(),
         type,
         position,
-        data: { label: `${type} node`, onChange: onNodeDataChange, onDelete: onNodeDelete },
+        data: initialData,
       };
 
       setNodes((nds) => nds.concat(newNode));
@@ -171,108 +268,143 @@ function App() {
   const runPipeline = async () => {
     setIsRunning(true);
     try {
-      // Extract config from nodes
-      const datasetNode = nodes.find((n) => n.type === 'dataset');
-      const preprocessingNode = nodes.find((n) => n.type === 'preprocessing');
-      const splitNode = nodes.find((n) => n.type === 'split');
-      const modelNode = nodes.find((n) => n.type === 'model');
-      const resultNode = nodes.find((n) => n.type === 'result');
+      const resultNodes = nodes.filter((n) => n.type === 'result');
+      if (resultNodes.length === 0) throw new Error("Add a Result node to see output!");
 
-      if (!datasetNode?.data.file) throw new Error("No dataset uploaded");
-      if (!modelNode?.data.targetColumn) throw new Error("No target column selected");
+      const batchPayload: Record<string, any> = {};
 
-      const payload = {
-        target_column: modelNode.data.targetColumn,
-        scaler_type: preprocessingNode?.data.scaler || 'None',
-        test_size: splitNode?.data.testSize || 0.2,
-        model_type: modelNode.data.modelType || 'Logistic Regression',
+      // Helper to find parent node
+      const getParent = (nodeId: string) => {
+        const edge = edges.find((e) => e.target === nodeId);
+        if (!edge) return null;
+        return nodes.find((n) => n.id === edge.source) || null;
       };
 
-      const response = await axios.post('http://localhost:8000/run_pipeline', payload);
+      for (const resNode of resultNodes) {
+        // 1. Find Model
+        const modelNode = getParent(resNode.id);
+        if (!modelNode || modelNode.type !== 'model') continue;
 
-      // Update result node
-      if (resultNode) {
-        onNodeDataChange(resultNode.id, { ...resultNode.data, results: response.data });
-      } else {
-        alert("Add a Result node to see output!");
-        console.log("Results:", response.data);
+        // 2. Traverse upstream to find all config nodes
+        let splitNode = null;
+        let preprocessingNode = null;
+        let imputationNode = null;
+        let encodingNode = null;
+        let datasetNode = null;
+
+        let current = getParent(modelNode.id);
+
+        // Traverse back up to 10 steps to find the dataset
+        for (let i = 0; i < 10; i++) {
+          if (!current) break;
+
+          if (current.type === 'split') splitNode = current;
+          else if (current.type === 'preprocessing') preprocessingNode = current;
+          else if (current.type === 'imputation') imputationNode = current;
+          else if (current.type === 'encoding') encodingNode = current;
+          else if (current.type === 'dataset') {
+            datasetNode = current;
+            break; // Found flow start
+          }
+
+          current = getParent(current.id);
+        }
+
+        // Validate minimal path
+        if (!datasetNode) {
+          // Skip this result node if path is incomplete, but don't error out entire batch unless all are empty
+          continue;
+        }
+
+        if (!datasetNode.data.file && !datasetNode.data.file_id) throw new Error(`Dataset node connected to ${resNode.data.label} is empty`);
+        if (!modelNode.data.targetColumn) throw new Error(`Model node connected to ${resNode.data.label} has no target column`);
+
+        batchPayload[resNode.id] = {
+          file_id: datasetNode.data.file_id || datasetNode.data.file,
+          target_column: modelNode.data.targetColumn,
+          scaler_type: preprocessingNode?.data.scaler || 'None',
+          imputer_strategy: imputationNode?.data.strategy || 'mean',
+          encoder_strategy: encodingNode?.data.strategy || 'onehot',
+          test_size: splitNode?.data.testSize || 0.2,
+          model_type: modelNode.data.modelType || 'Logistic Regression',
+        };
       }
+
+      if (Object.keys(batchPayload).length === 0) throw new Error("No valid pipeline paths found. Connect Dataset -> Model -> Result.");
+
+      const response = await axios.post('http://localhost:8000/run_pipeline_batch', batchPayload);
+      const results = response.data;
+
+      // Distribute results back to nodes
+      let successCount = 0;
+      resultNodes.forEach((rn) => {
+        if (results[rn.id]) {
+          if (results[rn.id].error) {
+            toast.error(`Error in ${rn.data.label || 'Result'}: ${results[rn.id].error}`);
+          } else {
+            // Clear previous metrics to avoid mixing Regression/Classification keys
+            const {
+              r2_score, mse, mae, accuracy, classification_report, confusion_matrix, is_regression,
+              ...prevData
+            } = rn.data;
+
+            onNodeDataChange(rn.id, { ...prevData, ...results[rn.id] });
+            successCount++;
+          }
+        }
+      });
+
+      if (successCount > 0) toast.success(`Pipeline executed! Updated ${successCount} result(s).`);
 
     } catch (error: any) {
       console.error(error);
-      alert(error.response?.data?.detail || error.message);
+      const msg = error.response?.data?.detail || error.message;
+      toast.error(msg);
     } finally {
       setIsRunning(false);
     }
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-slate-950">
-      <header className="bg-slate-900/80 backdrop-blur-md border-b border-slate-800/50 p-4 flex justify-between items-center h-16 shrink-0 z-20 shadow-lg relative">
-        <div className="absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-blue-500/50 to-transparent opacity-50" />
+    <div className="flex flex-col h-screen w-screen bg-white text-[#202124] font-sans">
+      <header className="bg-white/95 backdrop-blur-xl border-b border-gray-200 p-4 flex justify-between items-center h-16 shrink-0 z-20 relative">
+        {/* Google Colors Top Bar */}
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#4285F4] via-[#EA4335] to-[#FBBC05]" />
 
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3">
             <div className="relative group">
-              <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg blur opacity-40 group-hover:opacity-75 transition duration-200" />
-              <div className="relative w-9 h-9 bg-slate-900 rounded-lg flex items-center justify-center border border-slate-700/50 ring-1 ring-white/10">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="url(#logo-gradient)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <defs>
-                    <linearGradient id="logo-gradient" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor="#3b82f6" />
-                      <stop offset="100%" stopColor="#a855f7" />
-                    </linearGradient>
-                  </defs>
-                  <path d="M12 2a10 10 0 1 0 10 10H12V2z" />
-                  <path d="M12 12 2.1 12a10.01 10.01 0 0 0 1.4 2.8L12 12z" />
-                  <path d="M12 12V2a10 10 0 0 1 3.8 1.5L12 12z" />
-                </svg>
+              <div className="relative w-24 h-12 flex items-center justify-center transition-transform group-hover:scale-105 overflow-hidden">
+                <img src={logo} alt="FlowML Logo" className="w-full h-full object-cover" />
               </div>
             </div>
             <div>
-              <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white via-blue-100 to-blue-200 tracking-tight">
-                NeuroFlow
+              <h1 className="text-xl font-bold text-[#202124] tracking-tight flex items-center gap-0.5">
+                <span className="text-[#4285F4]">Flow</span>
+                <span className="text-[#34A853]">ML</span>
               </h1>
-              <div className="text-[10px] font-medium text-blue-400/80 tracking-widest uppercase">AI Pipeline Orchestrator</div>
+              <div className="text-[10px] font-medium text-gray-500 tracking-widest uppercase">AI Pipeline Orchestrator</div>
             </div>
           </div>
-
-          {/* Left Panel Toggle */}
-          <button
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className={`p-2 rounded-lg transition-colors ${!isSidebarOpen ? 'bg-blue-500/10 text-blue-400' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'}`}
-            title="Toggle Sidebar"
-          >
-            {isSidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeft size={18} />}
-          </button>
         </div>
 
         <div className="flex items-center gap-4">
-          {/* Right Panel Toggle */}
-          <button
-            onClick={() => setIsChatOpen(!isChatOpen)}
-            className={`p-2 rounded-lg transition-colors ${!isChatOpen ? 'bg-purple-500/10 text-purple-400' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'}`}
-            title="Toggle Chat"
-          >
-            {isChatOpen ? <PanelRightClose size={18} /> : <PanelRight size={18} />}
-          </button>
-
           <button
             onClick={runPipeline}
             disabled={isRunning}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-white font-semibold transition-all shadow-lg border border-white/10 ${isRunning
-              ? 'bg-slate-800 cursor-not-allowed text-slate-500 shadow-none'
-              : 'bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:shadow-blue-500/25 hover:scale-[1.02] active:scale-[0.98]'
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-white font-medium transition-all shadow-md ${isRunning
+              ? 'bg-gray-100 cursor-not-allowed text-gray-400 shadow-none'
+              : 'bg-[#1a73e8] hover:bg-[#1557b0] hover:shadow-lg active:shadow-md'
               }`}
           >
             {isRunning ? (
               <>
-                <div className="w-4 h-4 border-2 border-white/20 border-t-white/80 rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-gray-400 border-t-gray-600 rounded-full animate-spin" />
                 <span>Processing...</span>
               </>
             ) : (
               <>
-                <Play size={16} fill="currentColor" className="opacity-90" />
+                <Play size={18} fill="currentColor" className="opacity-90" />
                 <span>Run Pipeline</span>
               </>
             )}
@@ -283,20 +415,20 @@ function App() {
       <div className="flex flex-1 overflow-hidden h-[calc(100vh-64px)] relative">
         <ReactFlowProvider>
           {/* Sidebar Area */}
-          <div className={`transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-72' : 'w-0'} flex flex-col border-r border-slate-800/50 bg-slate-900/50 backdrop-blur-xl relative z-10 overflow-hidden`}>
-            <Sidebar />
+          <div className={`transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-72' : 'w-0'} flex flex-col border-r border-gray-200 relative z-10 overflow-hidden bg-white shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)]`}>
+            <Sidebar onClose={() => setIsSidebarOpen(false)} />
           </div>
 
           {/* Main Canvas */}
-          <div className="flex-1 h-full w-full bg-slate-950 relative group/canvas" ref={reactFlowWrapper}>
+          <div className="flex-1 h-full w-full bg-[#F8F9FA] relative group/canvas" ref={reactFlowWrapper}>
             {/* Floating Sidebar Toggle */}
             <div className={`absolute top-4 left-4 z-50 transition-all duration-300 ${!isSidebarOpen ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-10 pointer-events-none'}`}>
               <button
                 onClick={() => setIsSidebarOpen(true)}
-                className="p-3 bg-slate-900/50 backdrop-blur-md border border-slate-700/50 rounded-xl text-blue-400 shadow-xl hover:scale-105 hover:bg-blue-500/10 transition-all duration-300 group"
+                className="p-3 bg-white border border-gray-200 rounded-full text-[#5f6368] shadow-lg hover:shadow-xl hover:text-[#202124] transition-all duration-300 group"
                 title="Open Sidebar"
               >
-                <LayoutGrid size={20} className="group-hover:text-blue-300 transition-colors" />
+                <LayoutGrid size={20} />
               </button>
             </div>
 
@@ -304,10 +436,10 @@ function App() {
             <div className={`absolute top-4 right-4 z-50 transition-all duration-300 ${!isChatOpen ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10 pointer-events-none'}`}>
               <button
                 onClick={() => setIsChatOpen(true)}
-                className="p-3 bg-slate-900/50 backdrop-blur-md border border-slate-700/50 rounded-xl text-purple-400 shadow-xl hover:scale-105 hover:bg-purple-500/10 transition-all duration-300 group"
+                className="p-3 bg-white border border-gray-200 rounded-full text-[#5f6368] shadow-lg hover:shadow-xl hover:text-[#4285F4] transition-all duration-300 group"
                 title="Open Chat"
               >
-                <MessageSquare size={20} className="group-hover:text-purple-300 transition-colors" />
+                <MessageSquare size={20} />
               </button>
             </div>
 
@@ -321,29 +453,45 @@ function App() {
               onDrop={onDrop}
               onDragOver={onDragOver}
               nodeTypes={nodeTypes}
-              fitView
-              fitViewOptions={{ maxZoom: 1 }}
+              defaultViewport={{ x: 50, y: 50, zoom: 0.8 }}
               minZoom={0.1}
               maxZoom={1.5}
               defaultEdgeOptions={{
                 animated: true,
-                style: { stroke: '#6366f1', strokeWidth: 2 },
+                style: { stroke: '#bdc1c6', strokeWidth: 2 },
               }}
-              className="bg-slate-950"
+              className="bg-[#F8F9FA]"
+              deleteKeyCode={['Backspace', 'Delete']}
+              nodesFocusable={true}
             >
-              <Controls className="!bg-slate-800 !border-slate-700 !shadow-xl [&>button]:!border-slate-700 [&>button]:!fill-slate-400 hover:[&>button]:!fill-white hover:[&>button]:!bg-slate-700" />
-              <Background color="#334155" gap={20} size={1} />
+              <Controls className="!bg-white !border-gray-200 !shadow-lg !rounded-lg !text-[#5f6368] [&>button]:!border-gray-100 [&>button]:!fill-[#5f6368] hover:[&>button]:!bg-[#F1F3F4] hover:[&>button]:!fill-[#202124]" />
+              <Background color="#dadce0" gap={20} size={1} />
             </ReactFlow>
           </div>
 
           {/* Chat Panel Area */}
-          <div className={`transition-all duration-300 ease-in-out ${isChatOpen ? 'w-80' : 'w-0'} flex flex-col border-l border-slate-800/50 bg-slate-900/50 backdrop-blur-xl relative z-10 overflow-hidden`}>
-            <ChatPanel />
+          <div
+            className={`flex flex-col border-l border-gray-200 relative z-10 overflow-visible transition-all duration-200 ease-out bg-white shadow-[-4px_0_24px_-12px_rgba(0,0,0,0.1)]`}
+            style={{ width: isChatOpen ? chatWidth : 0 }}
+          >
+            {isChatOpen && (
+              <div
+                className="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-[#4285F4] z-50 transition-colors"
+                onMouseDown={startResizing}
+              />
+            )}
+            <div className="w-full h-full overflow-hidden">
+              <ChatPanel
+                onClose={() => setIsChatOpen(false)}
+                nodes={nodes}
+                edges={edges}
+              />
+            </div>
           </div>
         </ReactFlowProvider>
       </div>
+      <Toaster position="top-right" richColors theme="dark" />
     </div>
-
   );
 }
 
