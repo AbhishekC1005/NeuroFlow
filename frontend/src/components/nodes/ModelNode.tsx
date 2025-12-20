@@ -12,7 +12,7 @@ export default function ModelNode({ data, id, selected }: any) {
     };
 
     return (
-        <div className={`bg-white rounded-xl shadow-lg border-2 border-[#EA4335] w-72 overflow-hidden transition-all group ${selected ? 'ring-2 ring-offset-2 ring-[#EA4335] shadow-[0_0_20px_rgba(234,67,53,0.4)]' : 'hover:shadow-[#EA4335]/20'}`}>
+        <div className={`bg-white rounded-xl shadow-lg border-2 border-[#EA4335] w-60 overflow-hidden transition-all group ${selected ? 'ring-2 ring-offset-2 ring-[#EA4335] shadow-[0_0_20px_rgba(234,67,53,0.4)]' : 'hover:shadow-[#EA4335]/20'}`}>
             {/* Custom Target Handle (Left) */}
             <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 z-50 flex items-center justify-center w-8 h-8">
                 <Handle

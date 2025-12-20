@@ -161,6 +161,11 @@ export default function Sidebar({ onClose }: { onClose: () => void }) {
 
             {/* Scrollable Content - Grid Layout */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-5 relative z-10">
+                {/* Drag & Drop Instruction */}
+                <div className="flex items-center justify-center gap-2 py-2 px-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <span className="text-[10px] font-medium text-blue-600">👆 Drag & Drop components to canvas</span>
+                </div>
+
                 {filteredCategories.length > 0 ? (
                     filteredCategories.map((category, idx) => (
                         <div key={idx} className="space-y-2">

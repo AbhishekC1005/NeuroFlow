@@ -8,7 +8,7 @@ export default function ImputationNode({ data, id, selected }: any) {
     };
 
     return (
-        <div className={`bg-white rounded-xl shadow-lg border-2 border-[#F97316] w-64 overflow-hidden transition-all group ${selected ? 'ring-2 ring-offset-2 ring-[#F97316] shadow-[0_0_20px_rgba(249,115,22,0.4)]' : 'hover:shadow-[#F97316]/20'}`}>
+        <div className={`bg-white rounded-xl shadow-lg border-2 border-[#F97316] w-56 overflow-hidden transition-all group ${selected ? 'ring-2 ring-offset-2 ring-[#F97316] shadow-[0_0_20px_rgba(249,115,22,0.4)]' : 'hover:shadow-[#F97316]/20'}`}>
             {/* Custom Target Handle (Left) */}
             <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 z-50 flex items-center justify-center w-8 h-8">
                 {/* Interactive Handle */}

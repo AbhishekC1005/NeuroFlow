@@ -409,7 +409,19 @@ function App() {
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden h-[calc(100vh-64px)] relative">
+      {/* Backend Delay Notice Banner */}
+      <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-white py-0.5 overflow-hidden relative shrink-0">
+        <div className="animate-marquee whitespace-nowrap flex items-center gap-8">
+          {[...Array(4)].map((_, i) => (
+            <span key={i} className="flex items-center gap-1.5 text-xs font-medium">
+              <span className="inline-block w-2 h-2 bg-white rounded-full animate-pulse"></span>
+              ⚡ Backend is deployed on Render (Free Tier) — Initial requests may take 30-60 seconds to respond while the server wakes up. Thank you for your patience!
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-1 overflow-hidden h-[calc(100vh-64px-32px)] relative">
         <ReactFlowProvider>
           {/* Sidebar Area */}
           <div className={`transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-72' : 'w-0'} flex flex-col border-r border-gray-200 relative z-10 overflow-hidden bg-white shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)]`}>

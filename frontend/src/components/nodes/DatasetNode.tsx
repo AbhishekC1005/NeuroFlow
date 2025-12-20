@@ -11,6 +11,14 @@ export default function DatasetNode({ data, id, selected }: any) {
         const file = event.target.files?.[0];
         if (!file) return;
 
+        // Check file size limit (10 MB)
+        const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB in bytes
+        if (file.size > MAX_FILE_SIZE) {
+            toast.error(`File size exceeds 10 MB limit. Please upload a smaller file.`);
+            event.target.value = ''; // Reset the input
+            return;
+        }
+
         const formData = new FormData();
         formData.append('file', file);
 
@@ -34,7 +42,7 @@ export default function DatasetNode({ data, id, selected }: any) {
     };
 
     return (
-        <div className={`bg-white rounded-xl shadow-lg border-2 border-[#4285F4] w-80 overflow-hidden transition-all group ${selected ? 'ring-2 ring-offset-2 ring-[#4285F4] shadow-[0_0_20px_rgba(66,133,244,0.4)]' : 'hover:shadow-[#4285F4]/20'}`}>
+        <div className={`bg-white rounded-xl shadow-lg border-2 border-[#4285F4] w-64 overflow-hidden transition-all group ${selected ? 'ring-2 ring-offset-2 ring-[#4285F4] shadow-[0_0_20px_rgba(66,133,244,0.4)]' : 'hover:shadow-[#4285F4]/20'}`}>
             <div className="bg-[#4285F4] px-4 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <div className="p-1.5 bg-white/20 rounded-md text-white">
