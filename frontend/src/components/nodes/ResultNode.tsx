@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { Handle, Position } from 'reactflow';
 import { BarChart3, Trash2, Table as TableIcon, Grid, TrendingUp, Plus } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -85,7 +85,7 @@ export default function ResultNode({ data, id, selected }: any) {
                                                 formatter={(value: any) => [value.toFixed(4), 'Importance']}
                                             />
                                             <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={16}>
-                                                {data.feature_importance.map((entry: any, index: number) => (
+                                                {data.feature_importance.map((_entry: any, index: number) => (
                                                     <Cell key={`cell-${index}`} fill={index < 3 ? '#34A853' : '#94a3b8'} />
                                                 ))}
                                             </Bar>

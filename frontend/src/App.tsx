@@ -6,14 +6,10 @@ import ReactFlow, {
   useEdgesState,
   Controls,
   Background,
-  ConnectionMode,
-  MarkerType,
 } from 'reactflow';
 import type {
   Connection,
-  Edge,
   Node,
-  ReactFlowInstance,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import axios from 'axios';
