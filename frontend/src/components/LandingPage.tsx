@@ -351,7 +351,7 @@ export default function LandingPage({ onEnterWorkspace }: LandingPageProps) {
                         </span>
                     </div>
                     <p className="text-sm text-gray-500">
-                        Built with ❤️ for the ML community
+                        Contact: <a href="mailto:abhishekchaudhari336@gmail.com" className="text-[#4285F4] hover:underline">abhishekchaudhari336@gmail.com</a>
                     </p>
                 </div>
             </footer>
