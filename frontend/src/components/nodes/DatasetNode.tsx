@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Handle, Position } from 'reactflow';
 import axios from 'axios';
-import { Upload, Trash2, Table as TableIcon, ChevronDown, ChevronUp } from 'lucide-react';
+import { Upload, Trash2, Table as TableIcon, ChevronDown, ChevronUp, Loader2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function DatasetNode({ data, id, selected }: any) {
     const [showPreview, setShowPreview] = useState(false);
+    const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'uploaded'>('idle');
 
     const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -22,8 +23,10 @@ export default function DatasetNode({ data, id, selected }: any) {
         const formData = new FormData();
         formData.append('file', file);
 
+        setUploadStatus('uploading');
+
         try {
-            const BASE_URL = import.meta.env.VITE_API_URL || 'https://neuroflow-489y.onrender.com';
+            const BASE_URL = import.meta.env.VITE_API_URL;
             const response = await axios.post(`${BASE_URL}/upload`, formData);
             // Response: { id, preview, columns, shape }
             data.onChange(id, {
@@ -34,10 +37,13 @@ export default function DatasetNode({ data, id, selected }: any) {
                 preview: response.data.preview,
                 shape: response.data.shape
             });
+            setUploadStatus('uploaded');
+            toast.success('File uploaded successfully!');
         } catch (error: any) {
             console.error('Upload failed', error);
             const msg = error.response?.data?.detail || error.message || 'Upload failed';
             toast.error(`Upload failed: ${msg}`);
+            setUploadStatus('idle');
         }
     };
 
@@ -60,12 +66,33 @@ export default function DatasetNode({ data, id, selected }: any) {
 
             <div className="p-5 space-y-4">
                 <div>
-                    <label className="flex items-center justify-center gap-3 w-full py-3 cursor-pointer bg-slate-50 hover:bg-slate-100 border border-slate-200 border-dashed rounded-lg transition-all group-hover:border-[#4285F4]/50">
-                        <Upload size={18} className="text-slate-500 group-hover:text-[#4285F4] transition-colors" />
-                        <span className="text-sm text-slate-600 group-hover:text-slate-900 truncate max-w-[200px] font-medium">
-                            {data.file || "Upload CSV/Excel"}
-                        </span>
-                        <input type="file" className="hidden" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} />
+                    <label className={`flex items-center justify-center gap-3 w-full py-3 cursor-pointer border border-dashed rounded-lg transition-all ${uploadStatus === 'uploading'
+                        ? 'bg-blue-50 border-blue-300 cursor-wait'
+                        : uploadStatus === 'uploaded'
+                            ? 'bg-green-50 border-green-300'
+                            : 'bg-slate-50 hover:bg-slate-100 border-slate-200 group-hover:border-[#4285F4]/50'
+                        }`}>
+                        {uploadStatus === 'uploading' ? (
+                            <>
+                                <Loader2 size={18} className="text-blue-500 animate-spin" />
+                                <span className="text-sm text-blue-600 font-medium">Uploading...</span>
+                            </>
+                        ) : uploadStatus === 'uploaded' ? (
+                            <>
+                                <CheckCircle2 size={18} className="text-green-500" />
+                                <span className="text-sm text-green-600 truncate max-w-[200px] font-medium">
+                                    {data.file || "Uploaded ✓"}
+                                </span>
+                            </>
+                        ) : (
+                            <>
+                                <Upload size={18} className="text-slate-500 group-hover:text-[#4285F4] transition-colors" />
+                                <span className="text-sm text-slate-600 group-hover:text-slate-900 truncate max-w-[200px] font-medium">
+                                    {data.file || "Upload CSV/Excel"}
+                                </span>
+                            </>
+                        )}
+                        <input type="file" className="hidden" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} disabled={uploadStatus === 'uploading'} />
                     </label>
                 </div>
 

@@ -88,9 +88,9 @@ function Workspace() {
     };
   }, [resize, stopResizing]);
 
-  // Keep-alive ping to backend every 3 minutes to prevent Render cold starts
+  // Keep-alive ping to backend every 3 minutes
   useEffect(() => {
-    const BASE_URL = import.meta.env.VITE_API_URL || 'https://neuroflow-489y.onrender.com';
+    const BASE_URL = import.meta.env.VITE_API_URL;
     let timeoutId: ReturnType<typeof setTimeout>;
 
     const pingBackend = async () => {
@@ -358,7 +358,7 @@ function Workspace() {
 
       if (Object.keys(batchPayload).length === 0) throw new Error("No valid pipeline paths found. Connect Dataset -> Model -> Result.");
 
-      const BASE_URL = import.meta.env.VITE_API_URL || 'https://neuroflow-489y.onrender.com';
+      const BASE_URL = import.meta.env.VITE_API_URL;
       const response = await axios.post(`${BASE_URL}/run_pipeline_batch`, batchPayload);
       const results = response.data;
 
@@ -439,13 +439,15 @@ function Workspace() {
         </div>
       </header>
 
-      {/* Backend Delay Notice Banner */}
-      <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-white py-0.5 overflow-hidden relative shrink-0">
-        <div className="animate-marquee whitespace-nowrap flex items-center gap-8">
-          {[...Array(4)].map((_, i) => (
-            <span key={i} className="flex items-center gap-2 text-sm">
+      {/* Info Banner */}
+      <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-white py-1 overflow-hidden relative shrink-0">
+        <div className="animate-marquee whitespace-nowrap flex items-center gap-12">
+          {[...Array(3)].map((_, i) => (
+            <span key={i} className="flex items-center gap-3 text-sm">
               <span className="inline-block w-2 h-2 bg-white rounded-full animate-pulse"></span>
-              ⚡ Backend is deployed on Render (Free Tier) — Initial requests may take 30-60 seconds. Thank you for your patience!
+              📁 Upload time depends on file size — please be patient with larger datasets
+              <span className="mx-4">•</span>
+              💬 Use the Chat AI efficiently for workflow guidance and debugging help!
             </span>
           ))}
         </div>
