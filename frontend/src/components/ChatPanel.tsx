@@ -79,11 +79,14 @@ export default function ChatPanel({ onClose, nodes, edges }: ChatPanelProps) {
                 edges: edges.map(e => ({ source: e.source, target: e.target }))
             };
 
-            const BASE_URL = import.meta.env.VITE_API_URL;
+            const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            const token = localStorage.getItem('token');
             const response = await axios.post(`${BASE_URL}/chat`, {
                 workflow: workflowContext,
                 question: userMsg.text,
                 sample_data: sampleData
+            }, {
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
 
             // Remove thinking message and add real response

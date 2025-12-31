@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import ReactFlow, {
   ReactFlowProvider,
   addEdge,
@@ -14,12 +14,15 @@ import type {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import axios from 'axios';
-import { Play, LayoutGrid, MessageSquare } from 'lucide-react';
+import { Play, LayoutGrid, MessageSquare, LogOut } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 
 import Sidebar from './components/Sidebar';
 import ChatPanel from './components/ChatPanel';
 import LandingPage from './components/LandingPage';
+import LoginPage from './components/LoginPage';
+import RegisterPage from './components/RegisterPage';
+import { AuthProvider, useAuth, getAuthHeaders } from './components/AuthContext';
 import DatasetNode from './components/nodes/DatasetNode';
 import PreprocessingNode from './components/nodes/PreprocessingNode';
 import ImputationNode from './components/nodes/ImputationNode';
@@ -61,6 +64,13 @@ function Workspace() {
   const [isChatOpen, setIsChatOpen] = useState(true);
   const [chatWidth, setChatWidth] = useState(350);
   const [isResizing, setIsResizing] = useState(false);
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   const startResizing = useCallback(() => {
     setIsResizing(true);
@@ -90,7 +100,7 @@ function Workspace() {
 
   // Keep-alive ping to backend every 3 minutes
   useEffect(() => {
-    const BASE_URL = import.meta.env.VITE_API_URL;
+    const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
     let timeoutId: ReturnType<typeof setTimeout>;
 
     const pingBackend = async () => {
@@ -358,8 +368,10 @@ function Workspace() {
 
       if (Object.keys(batchPayload).length === 0) throw new Error("No valid pipeline paths found. Connect Dataset -> Model -> Result.");
 
-      const BASE_URL = import.meta.env.VITE_API_URL;
-      const response = await axios.post(`${BASE_URL}/run_pipeline_batch`, batchPayload);
+      const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const response = await axios.post(`${BASE_URL}/run_pipeline_batch`, batchPayload, {
+        headers: getAuthHeaders()
+      });
       const results = response.data;
 
       // Distribute results back to nodes
@@ -436,6 +448,19 @@ function Workspace() {
               </>
             )}
           </button>
+
+          {user && (
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-600">{user.email}</span>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 rounded-full text-gray-600 hover:text-gray-800 hover:bg-gray-100 transition-all"
+              >
+                <LogOut size={16} />
+                <span>Logout</span>
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -539,16 +564,44 @@ function Workspace() {
 // Landing Page wrapper with navigation
 function LandingPageWrapper() {
   const navigate = useNavigate();
-  return <LandingPage onEnterWorkspace={() => navigate('/workspace')} />;
+  const { isAuthenticated } = useAuth();
+  return <LandingPage onEnterWorkspace={() => navigate(isAuthenticated ? '/workspace' : '/login')} />;
+}
+
+// Protected Route wrapper
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0f0f1a]">
+        <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
 }
 
 // Main App with Routes
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<LandingPageWrapper />} />
-      <Route path="/workspace" element={<Workspace />} />
-    </Routes>
+    <AuthProvider>
+      <Routes>
+        <Route path="/" element={<LandingPageWrapper />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/workspace" element={
+          <ProtectedRoute>
+            <Workspace />
+          </ProtectedRoute>
+        } />
+      </Routes>
+    </AuthProvider>
   );
 }
 

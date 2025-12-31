@@ -26,8 +26,11 @@ export default function DatasetNode({ data, id, selected }: any) {
         setUploadStatus('uploading');
 
         try {
-            const BASE_URL = import.meta.env.VITE_API_URL;
-            const response = await axios.post(`${BASE_URL}/upload`, formData);
+            const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            const token = localStorage.getItem('token');
+            const response = await axios.post(`${BASE_URL}/upload`, formData, {
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
             // Response: { id, preview, columns, shape }
             data.onChange(id, {
                 ...data,
