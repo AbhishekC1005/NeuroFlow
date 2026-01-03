@@ -17,8 +17,9 @@ import uuid
 class MLService:
     def __init__(self):
         # Persistent storage configuration
-        self.UPLOAD_DIR = "temp_uploads"
-        os.makedirs(self.UPLOAD_DIR, exist_ok=True)
+        # self.UPLOAD_DIR = "temp_uploads" # Legacy local storage
+        # os.makedirs(self.UPLOAD_DIR, exist_ok=True)
+
         
         # State for the currently running pipeline
         self.X_train = None
@@ -30,15 +31,14 @@ class MLService:
         self.is_regression = False
 
     def load_data(self, file_content: bytes, filename: str):
-        # Save file to disk for persistence
-        file_path = os.path.join(self.UPLOAD_DIR, filename)
-        with open(file_path, "wb") as f:
-            f.write(file_content)
+        # We no longer save to disk for persistence, as Supabase handles that.
+        # But pandas needs a file-like object.
+        file_obj = io.BytesIO(file_content)
 
         if filename.endswith('.csv'):
-            df = pd.read_csv(file_path)
+            df = pd.read_csv(file_obj)
         elif filename.endswith(('.xls', '.xlsx')):
-            df = pd.read_excel(file_path)
+            df = pd.read_excel(file_obj)
         else:
             raise ValueError("Unsupported file format")
         
@@ -50,16 +50,14 @@ class MLService:
             "shape": df.shape
         }
 
-    def load_and_split(self, filename: str, target_column: str, test_size: float = 0.2):
-        # Load from disk
-        file_path = os.path.join(self.UPLOAD_DIR, filename)
-        if not os.path.exists(file_path):
-            raise ValueError(f"Dataset {filename} not found on server. Please upload it again.")
+    def load_and_split(self, file_content: bytes, filename: str, target_column: str, test_size: float = 0.2):
+        # Load from memory
+        file_obj = io.BytesIO(file_content)
         
         if filename.endswith('.csv'):
-            df = pd.read_csv(file_path)
+            df = pd.read_csv(file_obj)
         elif filename.endswith(('.xls', '.xlsx')):
-            df = pd.read_excel(file_path)
+            df = pd.read_excel(file_obj)
         else:
              raise ValueError("Unsupported file format")
         
@@ -166,7 +164,7 @@ class MLService:
         self.is_regression = False
         
         if model_type == 'Logistic Regression':
-            self.model = LogisticRegression(max_iter=1000)
+            self.model = LogisticRegression(max_iter=2000)
         elif model_type == 'Decision Tree':
             self.model = DecisionTreeClassifier()
         elif model_type == 'Random Forest':
@@ -181,51 +179,124 @@ class MLService:
             raise ValueError(f"Unsupported model: {model_type}")
             
         self.model.fit(self.X_train, self.y_train)
-
-    def evaluate(self):
-        if self.model is None:
-            raise ValueError("Model not trained")
             
+    def evaluate(self):
+        if self.model is None or self.X_test is None:
+            raise ValueError("Model not trained or data not present")
+
         y_pred = self.model.predict(self.X_test)
         
-        # Feature Importance
-        importances = []
-        if hasattr(self.model, 'feature_importances_'):
-            # Tree-based
-            for name, val in zip(self.feature_names, self.model.feature_importances_):
-                importances.append({"name": name, "value": float(val)})
-        elif hasattr(self.model, 'coef_'):
-            # Linear models
-            coefs = self.model.coef_
-            if len(coefs.shape) > 1: # Multiclass logic or multi-output
-                coefs = coefs[0]
-            for name, val in zip(self.feature_names, coefs):
-                importances.append({"name": name, "value": abs(float(val))})
-        
-        # Sort importances
-        importances.sort(key=lambda x: x['value'], reverse=True)
-        importances = importances[:10] # Top 10
-
         if self.is_regression:
             mse = mean_squared_error(self.y_test, y_pred)
+            rmse = np.sqrt(mse)
             mae = mean_absolute_error(self.y_test, y_pred)
             r2 = r2_score(self.y_test, y_pred)
+            
+            # Feature Importance
+            feature_importance = []
+            if hasattr(self.model, 'feature_importances_'):
+                 feature_importance = [{"name": name, "value": float(val)} for name, val in zip(self.feature_names, self.model.feature_importances_)]
+            elif hasattr(self.model, 'coef_'):
+                 # For linear models, coef_ might be 1D or 2D
+                 coefs = self.model.coef_
+                 if len(coefs.shape) > 1: coefs = coefs[0]
+                 feature_importance = [{"name": name, "value": float(abs(val))} for name, val in zip(self.feature_names, coefs)]
+
             return {
-                "is_regression": True,
-                "r2_score": r2,
-                "mse": mse,
-                "mae": mae,
-                "feature_importance": importances
+                "mse": round(mse, 4),
+                "rmse": round(rmse, 4),
+                "mae": round(mae, 4),
+                "r2_score": round(r2, 4),
+                "feature_importance": feature_importance,
+                "is_regression": True
             }
         else:
-            accuracy = accuracy_score(self.y_test, y_pred)
+            acc = accuracy_score(self.y_test, y_pred)
             report = classification_report(self.y_test, y_pred, output_dict=True)
-            cm = confusion_matrix(self.y_test, y_pred, labels=self.model.classes_).tolist()
+            try:
+                 cm = confusion_matrix(self.y_test, y_pred).tolist()
+            except ValueError:
+                 cm = [] 
             
+            # Feature Importance
+            feature_importance = []
+            if hasattr(self.model, 'feature_importances_'):
+                 feature_importance = [{"name": name, "value": float(val)} for name, val in zip(self.feature_names, self.model.feature_importances_)]
+
             return {
-                "is_regression": False,
-                "accuracy": accuracy,
-                "classification_report": report,
+                "accuracy": round(acc, 4),
+                "report": report,
                 "confusion_matrix": cm,
-                "feature_importance": importances
+                "feature_importance": feature_importance,
+                "is_regression": False
             }
+
+    def run_pipeline(self, db, supabase, request, user_id):
+        """
+        Orchestrates the full ML pipeline:
+        1. Fetch Dataset metadata from DB
+        2. Download file from Supabase
+        3. Load & Split
+        4. Preprocess
+        5. Train
+        6. Evaluate
+        7. Save Result
+        """
+        # Lazy import to avoid circular dependencies if any (though models should be fine)
+        from models import Dataset, PipelineResult
+        
+        # 1. Fetch File Metadata
+        dataset = None
+        # Try as ID first
+        try:
+            dataset_id = int(request.file_id.strip())
+            dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+        except ValueError:
+            pass
+        
+        # Fallback: Try as filename
+        if not dataset:
+             dataset = db.query(Dataset).filter(Dataset.filename == request.file_id).first()
+
+        if not dataset:
+            raise ValueError(f"Dataset not found: {request.file_id}")
+        
+        # Download file content
+        try:
+            res = supabase.storage.from_("datasets").download(dataset.storage_path)
+            file_content = res
+        except Exception as e:
+             raise ValueError(f"File not found in storage: {dataset.storage_path}")
+
+        # 2. Load & Split
+        self.load_and_split(
+            file_content=file_content,
+            filename=dataset.filename,
+            target_column=request.target_column,
+            test_size=request.test_size
+        )
+        
+        # 3. Preprocess
+        self.apply_preprocessing(
+            imputer_strategy=request.imputer_strategy,
+            encoder_strategy=request.encoder_strategy,
+            scaler_type=request.scaler_type
+        )
+        
+        # 4. Train
+        self.train_model(request.model_type)
+        
+        # 5. Evaluate
+        results = self.evaluate()
+        
+        # 6. Save results
+        pipeline_result = PipelineResult(
+            user_id=user_id,
+            workflow_id=request.workflow_id,
+            results_json=results,
+            workflow_snapshot=request.workflow_snapshot
+        )
+        db.add(pipeline_result)
+        db.commit()
+        
+        return results

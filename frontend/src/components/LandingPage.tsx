@@ -37,14 +37,16 @@ export default function LandingPage({ onEnterWorkspace }: LandingPageProps) {
                             </span>
                         </div>
                     </div>
-                    <button
-                        onClick={onEnterWorkspace}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-[#4285F4] hover:bg-[#3367D6] text-white text-sm font-medium rounded-full transition-all duration-200 shadow-sm hover:shadow-md"
-                    >
-                        Get Started
-                        <ArrowRight size={16} />
-                    </button>
-                </div>
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={onEnterWorkspace}
+                            className="flex items-center gap-2 px-5 py-2.5 bg-[#4285F4] hover:bg-[#3367D6] text-white text-sm font-medium rounded-full transition-all duration-200 shadow-sm hover:shadow-md"
+                        >
+                            Get Started
+                            <ArrowRight size={16} />
+                        </button>
+                    </div>  {/* Added missing closing tag */}
+                </div>  {/* Closing nav container */}
             </nav>
 
             {/* Hero Section */}

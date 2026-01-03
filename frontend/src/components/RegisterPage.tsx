@@ -6,6 +6,7 @@ import logo from '../assets/image.png';
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -30,7 +31,7 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      await register(email, password);
+      await register(email, username, password);
       navigate('/login', { state: { message: 'Registration successful! Please sign in.' } });
     } catch (err: any) {
       setError(err.message || 'Registration failed');
@@ -69,6 +70,26 @@ export default function RegisterPage() {
                 {error}
               </div>
             )}
+
+            <div className="space-y-2">
+              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+                Username
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <User size={18} className="text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  id="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="@username"
+                  required
+                  className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-[#4285F4] focus:ring-2 focus:ring-[#4285F4]/20 outline-none transition-all text-gray-900 placeholder:text-gray-400"
+                />
+              </div>
+            </div>
 
             <div className="space-y-2">
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">

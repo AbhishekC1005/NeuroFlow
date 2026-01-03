@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 interface User {
     id: number;
     email: string;
+    username?: string;
 }
 
 interface AuthContextType {
@@ -10,7 +11,7 @@ interface AuthContextType {
     token: string | null;
     isLoading: boolean;
     login: (email: string, password: string) => Promise<void>;
-    register: (email: string, password: string) => Promise<void>;
+    register: (email: string, username: string, password: string) => Promise<void>;
     logout: () => void;
     isAuthenticated: boolean;
 }
@@ -90,13 +91,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(userData);
     };
 
-    const register = async (email: string, password: string) => {
+    const register = async (email: string, username: string, password: string) => {
         const response = await fetch(`${API_BASE_URL}/auth/register`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ email, password }),
+            body: JSON.stringify({ email, username, password }),
         });
 
         if (!response.ok) {
