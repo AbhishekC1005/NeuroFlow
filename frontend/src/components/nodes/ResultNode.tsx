@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Handle, Position } from 'reactflow';
 import {
-    BarChart3, Trash2, Plus, Eye, X, Maximize2
+    BarChart3, Trash2, Plus, X, Maximize2
 } from 'lucide-react';
 import ResultDashboard from '../ResultDashboard';
 import { createPortal } from 'react-dom';
