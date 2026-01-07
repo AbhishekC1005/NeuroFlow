@@ -20,8 +20,6 @@ class User(Base):
     datasets = relationship("Dataset", back_populates="owner", cascade="all, delete-orphan")
     workflows = relationship("Workflow", back_populates="owner", cascade="all, delete-orphan")
     pipeline_results = relationship("PipelineResult", back_populates="owner", cascade="all, delete-orphan")
-    chat_memberships = relationship("ChatParticipant", back_populates="user", cascade="all, delete-orphan")
-    messages = relationship("ChatMessage", back_populates="sender", cascade="all, delete-orphan")
 
 
 class Dataset(Base):
@@ -68,46 +66,4 @@ class PipelineResult(Base):
     owner = relationship("User", back_populates="pipeline_results")
 
 
-# Chat Models
 
-class ChatGroup(Base):
-    __tablename__ = "chat_groups"
-
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=True) # Null for direct messages
-    is_group = Column(Integer, default=0) # 0 = DM, 1 = Group
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    # Relationships
-    participants = relationship("ChatParticipant", back_populates="group", cascade="all, delete-orphan")
-    messages = relationship("ChatMessage", back_populates="group", cascade="all, delete-orphan")
-
-
-class ChatParticipant(Base):
-    __tablename__ = "chat_participants"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    group_id = Column(Integer, ForeignKey("chat_groups.id", ondelete="CASCADE"), nullable=False)
-    joined_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    # Relationships
-    user = relationship("User", back_populates="chat_memberships")
-    group = relationship("ChatGroup", back_populates="participants")
-
-
-class ChatMessage(Base):
-    __tablename__ = "chat_messages"
-
-    id = Column(Integer, primary_key=True, index=True)
-    group_id = Column(Integer, ForeignKey("chat_groups.id", ondelete="CASCADE"), nullable=False)
-    sender_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    content = Column(Text, nullable=True)
-    file_url = Column(Text, nullable=True)
-    file_type = Column(String(50), nullable=True)
-    file_name = Column(String(255), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    # Relationships
-    group = relationship("ChatGroup", back_populates="messages")
-    sender = relationship("User", back_populates="messages")

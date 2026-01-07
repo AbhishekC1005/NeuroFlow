@@ -18,9 +18,10 @@ type ChatPanelProps = {
     onClose: () => void;
     nodes: Node[];
     edges: Edge[];
+    onPipelineCreate?: (nodes: Node[], edges: Edge[]) => void;
 };
 
-export default function ChatPanel({ onClose, nodes, edges }: ChatPanelProps) {
+export default function ChatPanel({ onClose, nodes, edges, onPipelineCreate }: ChatPanelProps) {
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([
         {
@@ -89,6 +90,7 @@ export default function ChatPanel({ onClose, nodes, edges }: ChatPanelProps) {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
 
+
             // Remove thinking message and add real response
             setMessages(prev => {
                 const filtered = prev.filter(m => m.id !== thinkingId);
@@ -99,6 +101,14 @@ export default function ChatPanel({ onClose, nodes, edges }: ChatPanelProps) {
                     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 }];
             });
+
+            // Handle Agentic Command (Create Pipeline)
+            if (response.data.command && response.data.command.type === 'create_pipeline') {
+                if (onPipelineCreate && response.data.command.data) {
+                    onPipelineCreate(response.data.command.data.nodes, response.data.command.data.edges);
+                    toast.success("Pipeline created by AI!");
+                }
+            }
 
         } catch (error: any) {
             console.error(error);

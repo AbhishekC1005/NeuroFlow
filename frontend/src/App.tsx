@@ -11,8 +11,8 @@ import ReactFlow, {
 import type { Connection, Node, Edge } from 'reactflow';
 import 'reactflow/dist/style.css';
 import axios from 'axios';
-import { Play, LayoutGrid, MessageSquare, LogOut, Book, History, Users } from 'lucide-react';
-import ChatInterface from './components/ChatInterface';
+import { Play, LayoutGrid, MessageSquare, LogOut, Book, History } from 'lucide-react';
+
 import { Toaster, toast } from 'sonner';
 
 import Sidebar from './components/Sidebar';
@@ -67,6 +67,7 @@ function Workspace() {
   const [isChatOpen, setIsChatOpen] = useState(true);
   const [chatWidth, setChatWidth] = useState(350);
   const [isResizing, setIsResizing] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -114,53 +115,99 @@ function Workspace() {
   // Unified Initialization: Autosave + Template
   useEffect(() => {
     // If restoring from history, skip local logic (handled by another effect)
-    if (location.state?.restoreWorkflowId) return;
+    if (location.state?.restoreWorkflowId) {
+      setIsInitialized(true);
+      return;
+    }
 
     let currentNodes: Node[] = initialNodes;
     let currentEdges: Edge[] = [];
+    let hasRestored = false;
 
-    // 1. Try Restore Autosave
+    // 1. Always Try Restore Autosave First (Persistence)
     const autosaveStr = localStorage.getItem('workspace_autosave');
     if (autosaveStr) {
       try {
         const autosave = JSON.parse(autosaveStr);
-        if (Array.isArray(autosave.nodes)) {
+        if (Array.isArray(autosave.nodes) && autosave.nodes.length > 0) {
           currentNodes = autosave.nodes;
           currentEdges = autosave.edges || [];
+          hasRestored = true;
         }
       } catch (e) {
         console.error("Autosave restore failed", e);
       }
     }
 
-    // 2. Check for Pending Template (Overwrite)
+    // 2. Check for Pending Template (Smart Append)
     const templateFromState = location.state?.template;
     if (templateFromState) {
       try {
         const template = templateFromState;
-        // Overwrite existing state with template
-        currentNodes = template.nodes || [];
-        currentEdges = template.edges || [];
-        // toast.success(`Loaded template: ${template.name}`);
+
+        // If we have existing nodes, append intelligently
+        const hasContent = hasRestored || (currentNodes.length > 0 && currentNodes[0].id !== '1');
+
+        if (hasContent) {
+          const yOffset = Math.max(...currentNodes.map(n => n.position.y)) + 400; // More space for templates
+          const idMap: Record<string, string> = {};
+          const timestamp = Date.now();
+
+          // Remap Template Nodes
+          const newNodes = template.nodes.map((node: Node) => {
+            const newId = `${node.id}_${timestamp}`;
+            idMap[node.id] = newId;
+            return {
+              ...node,
+              id: newId,
+              position: {
+                x: node.position.x,
+                y: node.position.y + yOffset
+              }
+            };
+          });
+
+          // Remap Template Edges
+          const newEdges = (template.edges || []).map((edge: Edge) => ({
+            ...edge,
+            id: `${edge.id}_${timestamp}`,
+            source: idMap[edge.source] || edge.source,
+            target: idMap[edge.target] || edge.target,
+          }));
+
+          currentNodes = [...currentNodes, ...newNodes];
+          currentEdges = [...currentEdges, ...newEdges];
+
+          navigate(location.pathname, { replace: true, state: {} });
+          toast.success(`Appended template: ${template.name}`);
+
+        } else {
+          // Overwrite if workspace is empty/default
+          currentNodes = template.nodes || [];
+          currentEdges = template.edges || [];
+          navigate(location.pathname, { replace: true, state: {} });
+          toast.success(`Loaded template: ${template.name}`);
+        }
       } catch (e) {
         toast.error("Failed to load template");
       }
     }
 
     // Apply Final State
-    if (autosaveStr || templateFromState) {
-      setNodes(currentNodes);
-      setEdges(currentEdges);
-    }
-  }, [location]);
+    setNodes(currentNodes);
+    setEdges(currentEdges);
+    setIsInitialized(true); // Enable autosave
+  }, []); // Only run on mount
 
   // Auto-save Workspace (Writer)
   useEffect(() => {
+    if (!isInitialized) return;
+
     if (nodes.length > 0) {
       const autosave = { nodes, edges, timestamp: Date.now() };
       localStorage.setItem('workspace_autosave', JSON.stringify(autosave));
     }
-  }, [nodes, edges]);
+  }, [nodes, edges, isInitialized]);
 
 
 
@@ -316,14 +363,7 @@ function Workspace() {
             <span className="hidden sm:inline text-sm">History</span>
           </Link>
 
-          <Link
-            to="/chat"
-            className="flex items-center gap-2 px-4 py-2.5 rounded-full text-gray-600 hover:text-gray-900 hover:bg-gray-100 font-medium transition-all"
-            title="Community Chat"
-          >
-            <Users size={18} />
-            <span className="text-sm">Chat</span>
-          </Link>
+
 
           <div className="w-px h-6 bg-gray-200 mx-2" />
 
@@ -438,7 +478,52 @@ function Workspace() {
               <div className="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-[#4285F4] z-50 transition-colors" onMouseDown={startResizing} />
             )}
             <div className="w-full h-full overflow-hidden">
-              <ChatPanel onClose={() => setIsChatOpen(false)} nodes={nodes} edges={edges} />
+              <ChatPanel
+                onClose={() => setIsChatOpen(false)}
+                nodes={nodes}
+                edges={edges}
+                onPipelineCreate={(newNodes, newEdges) => {
+                  // Smart Append Logic
+                  if (nodes.length === 0) {
+                    setNodes(newNodes);
+                    setEdges(newEdges);
+                    return;
+                  }
+
+                  const yOffset = Math.max(...nodes.map(n => n.position.y)) + 300;
+                  const idMap: Record<string, string> = {};
+                  const timestamp = Date.now();
+
+                  // 1. Remap IDs and Position
+                  const remappedNodes = newNodes.map((node) => {
+                    const newId = `${node.id}_${timestamp}`; // Simple unique ID generation
+                    idMap[node.id] = newId;
+                    return {
+                      ...node,
+                      id: newId,
+                      position: {
+                        x: node.position.x,
+                        y: node.position.y + yOffset
+                      },
+                      // Ensure we keep the handlers
+                      data: { ...node.data }
+                    };
+                  });
+
+                  // 2. Remap Edges
+                  const remappedEdges = newEdges.map((edge) => ({
+                    ...edge,
+                    id: `${edge.id}_${timestamp}`,
+                    source: idMap[edge.source] || edge.source,
+                    target: idMap[edge.target] || edge.target,
+                  }));
+
+                  // 3. Append to State
+                  setNodes((prev) => [...prev, ...remappedNodes]);
+                  setEdges((prev) => [...prev, ...remappedEdges]);
+                  toast.success("Pipeline appended by AI!");
+                }}
+              />
             </div>
           </div>
         </ReactFlowProvider>
@@ -475,11 +560,7 @@ function App() {
             <HistoryPage />
           </ProtectedRoute>
         } />
-        <Route path="/chat" element={
-          <ProtectedRoute>
-            <ChatInterface />
-          </ProtectedRoute>
-        } />
+
         <Route path="/workspace" element={<ProtectedRoute><Workspace /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

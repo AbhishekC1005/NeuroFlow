@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Handle, Position } from 'reactflow';
 import { Pipette, Trash2, Plus } from 'lucide-react';
@@ -31,7 +32,7 @@ export default function ImputationNode({ data, id, selected }: any) {
                     <div className="p-2 bg-white/20 rounded-lg text-white">
                         <Pipette size={18} />
                     </div>
-                    <span className="font-semibold text-white text-base">Missing Values</span>
+                    <span className="font-semibold text-white text-lg">Missing Values</span>
                 </div>
                 <button
                     onClick={() => data.onDelete(id)}
@@ -42,10 +43,10 @@ export default function ImputationNode({ data, id, selected }: any) {
             </div>
 
             <div className="p-4">
-                <label className="block text-xs font-medium text-slate-500 mb-1.5 uppercase tracking-wide">Imputation Strategy</label>
+                <label className="block text-sm font-medium text-slate-500 mb-1.5 uppercase tracking-wide">Imputation Strategy</label>
                 <div className="relative group/select">
                     <select
-                        className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-[#F97316] focus:border-[#F97316] block p-2.5 appearance-none cursor-pointer transition-all hover:border-[#F97316]"
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-base rounded-lg focus:ring-[#F97316] focus:border-[#F97316] block p-2.5 appearance-none cursor-pointer transition-all hover:border-[#F97316]"
                         value={data.strategy || 'mean'}
                         onChange={handleChange}
                     >

@@ -9,6 +9,7 @@ interface HistoryItem {
     created_at: string;
     workflow_id: number | null;
     results_summary: any;
+    workflow_snapshot: any; // Added snapshot support
 }
 
 export default function HistoryPage() {
@@ -167,19 +168,26 @@ export default function HistoryPage() {
                                                 )}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {item.workflow_id ? (
-                                                    <div className="flex items-center gap-3">
-                                                        <span>Workflow #{item.workflow_id}</span>
+                                                <div className="flex items-center gap-3">
+                                                    {item.workflow_id ? <span>Workflow #{item.workflow_id}</span> : <span className="text-gray-400">Ad-hoc Run</span>}
+
+                                                    {/* Restore Button for BOTH saved and ad-hoc workflows */}
+                                                    {(item.workflow_id || item.workflow_snapshot) && (
                                                         <button
-                                                            onClick={() => navigate('/workspace', { state: { restoreWorkflowId: item.workflow_id } })}
+                                                            onClick={() => {
+                                                                if (item.workflow_id) {
+                                                                    navigate('/workspace', { state: { restoreWorkflowId: item.workflow_id } });
+                                                                } else if (item.workflow_snapshot) {
+                                                                    navigate('/workspace', { state: { template: item.workflow_snapshot } });
+                                                                }
+                                                            }}
                                                             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
+                                                            title="Restore this pipeline state"
                                                         >
                                                             Open
                                                         </button>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-gray-400 italic">Ad-hoc Run</span>
-                                                )}
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}

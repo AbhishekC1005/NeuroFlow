@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Handle, Position } from 'reactflow';
 import { Binary, Trash2, Plus } from 'lucide-react';
@@ -29,7 +30,7 @@ export default function EncodingNode({ data, id, selected }: any) {
                     <div className="p-2 bg-white/20 rounded-lg text-white">
                         <Binary size={18} />
                     </div>
-                    <span className="font-semibold text-white text-base">Encoding</span>
+                    <span className="font-semibold text-white text-lg">Encoding</span>
                 </div>
                 <button
                     onClick={() => data.onDelete(id)}
@@ -40,10 +41,10 @@ export default function EncodingNode({ data, id, selected }: any) {
             </div>
 
             <div className="p-4">
-                <label className="block text-xs font-medium text-slate-500 mb-1.5 uppercase tracking-wide">Encoding Strategy</label>
+                <label className="block text-sm font-medium text-slate-500 mb-1.5 uppercase tracking-wide">Encoding Strategy</label>
                 <div className="relative group/select">
                     <select
-                        className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-[#8B5CF6] focus:border-[#8B5CF6] block p-2.5 appearance-none cursor-pointer transition-all hover:border-[#8B5CF6]"
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-base rounded-lg focus:ring-[#8B5CF6] focus:border-[#8B5CF6] block p-2.5 appearance-none cursor-pointer transition-all hover:border-[#8B5CF6]"
                         value={data.strategy || 'onehot'}
                         onChange={handleChange}
                     >

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Handle, Position } from 'reactflow';
 import { Settings, Trash2, Plus } from 'lucide-react';
@@ -29,7 +30,7 @@ export default function PreprocessingNode({ data, id, selected }: any) {
           <div className="p-2 bg-white/20 rounded-lg text-white">
             <Settings size={18} />
           </div>
-          <span className="font-semibold text-white text-base">Preprocessing</span>
+          <span className="font-semibold text-white text-lg">Preprocessing</span>
         </div>
         <button
           onClick={() => data.onDelete(id)}
@@ -40,10 +41,10 @@ export default function PreprocessingNode({ data, id, selected }: any) {
       </div>
 
       <div className="p-4">
-        <label className="block text-xs font-medium text-slate-500 mb-1.5 uppercase tracking-wide">Scaler Type</label>
+        <label className="block text-sm font-medium text-slate-500 mb-1.5 uppercase tracking-wide">Scaler Type</label>
         <div className="relative">
           <select
-            className="w-full appearance-none bg-slate-50 border border-gray-200 text-slate-700 text-sm rounded-lg focus:ring-[#FBBC05] focus:border-[#FBBC05] block p-2.5 outline-none transition-colors"
+            className="w-full appearance-none bg-slate-50 border border-gray-200 text-slate-700 text-base rounded-lg focus:ring-[#FBBC05] focus:border-[#FBBC05] block p-2.5 outline-none transition-colors"
             onChange={handleChange}
             defaultValue={data.scaler || 'None'}
           >

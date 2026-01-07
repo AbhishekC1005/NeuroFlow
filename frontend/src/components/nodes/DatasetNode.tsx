@@ -1,12 +1,15 @@
+
 import React, { useState } from 'react';
 import { Handle, Position } from 'reactflow';
 import axios from 'axios';
-import { Upload, Trash2, Table as TableIcon, ChevronDown, ChevronUp, Loader2, CheckCircle2 } from 'lucide-react';
+import { Upload, Trash2, Table as TableIcon, ChevronDown, ChevronUp, Loader2, Activity, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
+import DatasetAnalysisModal from '../DatasetAnalysisModal';
 
 export default function DatasetNode({ data, id, selected }: any) {
     const [showPreview, setShowPreview] = useState(false);
     const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'uploaded'>('idle');
+    const [isAnalyzeOpen, setIsAnalyzeOpen] = useState(false);
 
     const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -51,114 +54,139 @@ export default function DatasetNode({ data, id, selected }: any) {
     };
 
     return (
-        <div className={`bg-white rounded-xl shadow-lg border-2 border-[#4285F4] w-80 overflow-hidden transition-all group ${selected ? 'ring-2 ring-offset-2 ring-[#4285F4] shadow-[0_0_20px_rgba(66,133,244,0.4)]' : 'hover:shadow-[#4285F4]/20'}`}>
-            <div className="bg-[#4285F4] px-5 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-white/20 rounded-lg text-white">
-                        <Upload size={18} />
+        <>
+            <div className={`bg-white rounded-xl shadow-lg border-2 border-[#4285F4] w-80 overflow-hidden transition-all group ${selected ? 'ring-2 ring-offset-2 ring-[#4285F4] shadow-[0_0_20px_rgba(66,133,244,0.4)]' : 'hover:shadow-[#4285F4]/20'}`}>
+                {/* Header */}
+                <div className="bg-[#4285F4] px-5 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-white/20 rounded-lg text-white">
+                            <Upload size={18} />
+                        </div>
+                        <span className="font-semibold text-white text-lg">Dataset</span>
                     </div>
-                    <span className="font-semibold text-white text-base">Dataset Input</span>
-                </div>
-                <button
-                    onClick={() => data.onDelete(id)}
-                    className="text-white/70 hover:text-white transition-colors p-1.5 rounded hover:bg-white/20"
-                >
-                    <Trash2 size={18} />
-                </button>
-            </div>
 
-            <div className="p-5 space-y-4">
-                <div>
-                    <label className={`flex items-center justify-center gap-3 w-full py-3 cursor-pointer border border-dashed rounded-lg transition-all ${uploadStatus === 'uploading'
-                        ? 'bg-blue-50 border-blue-300 cursor-wait'
-                        : uploadStatus === 'uploaded'
-                            ? 'bg-green-50 border-green-300'
-                            : 'bg-slate-50 hover:bg-slate-100 border-slate-200 group-hover:border-[#4285F4]/50'
-                        }`}>
-                        {uploadStatus === 'uploading' ? (
-                            <>
-                                <Loader2 size={18} className="text-blue-500 animate-spin" />
-                                <span className="text-sm text-blue-600 font-medium">Uploading...</span>
-                            </>
-                        ) : uploadStatus === 'uploaded' ? (
-                            <>
-                                <CheckCircle2 size={18} className="text-green-500" />
-                                <span className="text-sm text-green-600 truncate max-w-[200px] font-medium">
-                                    {data.file || "Uploaded ✓"}
-                                </span>
-                            </>
-                        ) : (
-                            <>
-                                <Upload size={18} className="text-slate-500 group-hover:text-[#4285F4] transition-colors" />
-                                <span className="text-sm text-slate-600 group-hover:text-slate-900 truncate max-w-[200px] font-medium">
-                                    {data.file || "Upload CSV/Excel"}
-                                </span>
-                            </>
+                    <div className="flex gap-1">
+                        {/* X-Ray Analyze Button - Only show if file exists */}
+                        {data.file && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setIsAnalyzeOpen(true); }}
+                                className="text-white/70 hover:text-white hover:bg-white/20 transition-all p-1.5 rounded"
+                                title="X-Ray Analysis"
+                            >
+                                <Activity size={18} />
+                            </button>
                         )}
-                        <input type="file" className="hidden" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} disabled={uploadStatus === 'uploading'} />
-                    </label>
-                </div>
-
-                {data.shape && (
-                    <div className="flex items-center justify-between text-sm bg-slate-50 p-3 rounded-lg border border-slate-200">
-                        <span className="text-slate-500">Dimensions:</span>
-                        <span className="font-mono font-medium text-slate-700">{data.shape[0]} rows × {data.shape[1]} cols</span>
-                    </div>
-                )}
-
-                {data.preview && (
-                    <div className="border border-slate-200 rounded-lg overflow-hidden">
                         <button
-                            onClick={() => setShowPreview(!showPreview)}
-                            className="w-full flex items-center justify-between p-2 bg-slate-50 hover:bg-slate-100 transition-colors text-xs font-medium text-slate-700"
+                            onClick={() => data.onDelete(id)}
+                            className="text-white/70 hover:text-white hover:bg-white/20 transition-all p-1.5 rounded"
                         >
-                            <div className="flex items-center gap-2">
-                                <TableIcon size={12} className="text-[#4285F4]" />
-                                <span>Data Preview</span>
-                            </div>
-                            {showPreview ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                            <Trash2 size={18} />
                         </button>
-
-                        {showPreview && (
-                            <div className="overflow-x-auto max-h-48 custom-scrollbar bg-white p-2">
-                                <table className="w-full text-[10px] text-left text-slate-600">
-                                    <thead className="text-slate-700 uppercase bg-slate-50 sticky top-0">
-                                        <tr>
-                                            {data.columns.slice(0, 5).map((col: string) => (
-                                                <th key={col} className="px-2 py-1.5 font-medium whitespace-nowrap">
-                                                    {col}
-                                                </th>
-                                            ))}
-                                            {data.columns.length > 5 && <th className="px-2 py-1">...</th>}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {data.preview.map((row: any, i: number) => (
-                                            <tr key={i} className="border-b border-slate-100 hover:bg-slate-50">
-                                                {data.columns.slice(0, 5).map((col: string) => (
-                                                    <td key={`${i}-${col}`} className="px-2 py-1.5 whitespace-nowrap">
-                                                        {row[col]?.toString().substring(0, 15)}
-                                                    </td>
-                                                ))}
-                                                {data.columns.length > 5 && <td className="px-2 py-1">...</td>}
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
                     </div>
-                )}
+                </div>
+
+                <div className="p-5 space-y-4">
+                    <div>
+                        <label className={`flex items-center justify-center gap-3 w-full py-3 cursor-pointer border border-dashed rounded-lg transition-all ${uploadStatus === 'uploading'
+                            ? 'bg-blue-50 border-blue-300 cursor-wait'
+                            : uploadStatus === 'uploaded' || data.file
+                                ? 'bg-green-50 border-green-300'
+                                : 'bg-slate-50 hover:bg-slate-100 border-slate-200 group-hover:border-[#4285F4]/50'
+                            }`}>
+                            {uploadStatus === 'uploading' ? (
+                                <>
+                                    <Loader2 size={18} className="text-blue-500 animate-spin" />
+                                    <span className="text-base text-blue-600 font-medium">Uploading...</span>
+                                </>
+                            ) : (data.file) ? (
+                                <>
+                                    <div className="bg-green-100 p-1.5 rounded text-green-600">
+                                        <FileSpreadsheet size={18} />
+                                    </div>
+                                    <span className="text-base text-green-700 truncate max-w-[180px] font-medium">
+                                        {data.file}
+                                    </span>
+                                </>
+                            ) : (
+                                <>
+                                    <Upload size={18} className="text-slate-500 group-hover:text-[#4285F4] transition-colors" />
+                                    <span className="text-base text-slate-600 group-hover:text-slate-900 truncate max-w-[200px] font-medium">
+                                        Upload CSV/Excel
+                                    </span>
+                                </>
+                            )}
+                            <input type="file" className="hidden" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} disabled={uploadStatus === 'uploading'} />
+                        </label>
+                    </div>
+
+                    {data.shape && (
+                        <div className="flex items-center justify-between text-base bg-slate-50 p-3 rounded-lg border border-slate-200">
+                            <span className="text-slate-500">Dimensions:</span>
+                            <span className="font-mono font-medium text-slate-700">{data.shape[0]} rows × {data.shape[1]} cols</span>
+                        </div>
+                    )}
+
+                    {data.preview && (
+                        <div className="border border-slate-200 rounded-lg overflow-hidden">
+                            <button
+                                onClick={() => setShowPreview(!showPreview)}
+                                className="w-full flex items-center justify-between p-2 bg-slate-50 hover:bg-slate-100 transition-colors text-sm font-medium text-slate-700"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <TableIcon size={12} className="text-[#4285F4]" />
+                                    <span>Data Preview</span>
+                                </div>
+                                {showPreview ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                            </button>
+
+                            {showPreview && (
+                                <div className="overflow-x-auto max-h-48 custom-scrollbar bg-white p-2">
+                                    <table className="w-full text-xs text-left text-slate-600">
+                                        <thead className="text-slate-700 uppercase bg-slate-50 sticky top-0">
+                                            <tr>
+                                                {data.columns.slice(0, 5).map((col: string) => (
+                                                    <th key={col} className="px-2 py-1.5 font-medium whitespace-nowrap">
+                                                        {col}
+                                                    </th>
+                                                ))}
+                                                {data.columns.length > 5 && <th className="px-2 py-1">...</th>}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {data.preview.map((row: any, i: number) => (
+                                                <tr key={i} className="border-b border-slate-100 hover:bg-slate-50">
+                                                    {data.columns.slice(0, 5).map((col: string) => (
+                                                        <td key={`${i}-${col}`} className="px-2 py-1.5 whitespace-nowrap">
+                                                            {row[col]?.toString().substring(0, 15)}
+                                                        </td>
+                                                    ))}
+                                                    {data.columns.length > 5 && <td className="px-2 py-1">...</td>}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {/* Custom Source Handle */}
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-50">
+                    <Handle
+                        type="source"
+                        position={Position.Right}
+                        className="!w-4 !h-4 !bg-[#4285F4] !border-2 !border-white !rounded-full cursor-crosshair"
+                    />
+                </div>
             </div>
 
-            {/* Custom Source Handle */}
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-50">
-                <Handle
-                    type="source"
-                    position={Position.Right}
-                    className="!w-4 !h-4 !bg-[#4285F4] !border-2 !border-white !rounded-full cursor-crosshair"
-                />
-            </div>
-        </div>
+            {/* X-Ray Modal */}
+            <DatasetAnalysisModal
+                isOpen={isAnalyzeOpen}
+                onClose={() => setIsAnalyzeOpen(false)}
+                fileId={data.file || ""}
+            />
+        </>
     );
 }

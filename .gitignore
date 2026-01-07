@@ -3,38 +3,46 @@
 Thumbs.db
 *.log
 
-# Editor
-.vscode
-.idea
+# Editor & IDE
+.vscode/
+.idea/
 *.swp
 *.swo
 
-# Node (Frontend)
-frontend/node_modules
-frontend/dist
-frontend/build
+# Dependency Directories (Recursive)
+**/node_modules/
+**/venv/
+**/.venv/
+**/env/
+**/__pycache__/
+
+# Frontend (Node/React)
+frontend/dist/
+frontend/build/
 frontend/.env
-frontend/.env.local
-frontend/.env.development.local
-frontend/.env.test.local
-frontend/.env.production.local
+frontend/.env.*
+!frontend/.env.example
 frontend/npm-debug.log*
 frontend/yarn-debug.log*
 frontend/yarn-error.log*
 
-# Python (Backend)
-backend/__pycache__/
-backend/*.py[cod]
-backend/*$py.class
-backend/venv/
-backend/.venv/
-backend/env/
+# Backend (Python/FastAPI)
 backend/.env
+backend/.env.*
+!backend/.env.example
 backend/temp_uploads/
-backend/db.sqlite3
-backend/*.db
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
 
-# Brain / Agent
+# Database
+*.sqlite3
+*.db
+backend/db.sqlite3
+
+# Agent & Brain (Internal)
 .gemini/
 .agent/
 brain/

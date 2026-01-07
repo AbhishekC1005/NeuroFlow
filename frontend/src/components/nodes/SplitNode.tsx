@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Handle, Position } from 'reactflow';
 import { Split, Trash2, Plus } from 'lucide-react';
@@ -29,7 +30,7 @@ export default function SplitNode({ data, id, selected }: any) {
                     <div className="p-2 bg-white/20 rounded-lg text-white">
                         <Split size={18} />
                     </div>
-                    <span className="font-semibold text-white text-base">Train-Test Split</span>
+                    <span className="font-semibold text-white text-lg">Train-Test Split</span>
                 </div>
                 <button
                     onClick={() => data.onDelete(id)}
@@ -41,8 +42,8 @@ export default function SplitNode({ data, id, selected }: any) {
 
             <div className="p-5">
                 <div className="flex justify-between items-center mb-2">
-                    <label className="text-sm font-medium text-slate-500 uppercase tracking-wide">Split Ratio</label>
-                    <span className="text-sm font-bold text-[#d946ef]">{Math.round((data.testSize || 0.2) * 100)}% Test</span>
+                    <label className="text-base font-medium text-slate-500 uppercase tracking-wide">Split Ratio</label>
+                    <span className="text-base font-bold text-[#d946ef]">{Math.round((data.testSize || 0.2) * 100)}% Test</span>
                 </div>
 
                 <input
@@ -58,7 +59,7 @@ export default function SplitNode({ data, id, selected }: any) {
                     className="nodrag w-full h-2 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#d946ef] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-md hover:[&::-webkit-slider-thumb]:scale-110 transition-all"
                 />
 
-                <div className="flex justify-between text-xs text-slate-400 mt-3 font-medium">
+                <div className="flex justify-between text-sm text-slate-400 mt-3 font-medium">
                     <span>Train: {100 - Math.round((data.testSize || 0.2) * 100)}%</span>
                     <span>Test: {Math.round((data.testSize || 0.2) * 100)}%</span>
                 </div>

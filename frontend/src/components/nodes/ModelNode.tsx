@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Handle, Position } from 'reactflow';
 import { BrainCircuit, Trash2, Plus } from 'lucide-react';
@@ -33,7 +34,7 @@ export default function ModelNode({ data, id, selected }: any) {
                     <div className="p-2 bg-white/20 rounded-lg text-white">
                         <BrainCircuit size={18} />
                     </div>
-                    <span className="font-semibold text-white text-base">Model Training</span>
+                    <span className="font-semibold text-white text-lg">Model Training</span>
                 </div>
                 <button
                     onClick={() => data.onDelete(id)}
@@ -45,10 +46,10 @@ export default function ModelNode({ data, id, selected }: any) {
 
             <div className="p-5 space-y-4">
                 <div>
-                    <label className="block text-sm font-medium text-slate-500 mb-2 uppercase tracking-wide">Target Column</label>
+                    <label className="block text-base font-medium text-slate-500 mb-2 uppercase tracking-wide">Target Column</label>
                     <div className="relative">
                         <select
-                            className="w-full appearance-none bg-slate-50 border border-gray-200 text-slate-700 text-base rounded-lg focus:ring-[#EA4335] focus:border-[#EA4335] block p-3 outline-none transition-colors"
+                            className="w-full appearance-none bg-slate-50 border border-gray-200 text-slate-700 text-lg rounded-lg focus:ring-[#EA4335] focus:border-[#EA4335] block p-3 outline-none transition-colors"
                             onChange={handleTargetChange}
                             defaultValue={data.targetColumn || ''}
                         >
@@ -64,10 +65,10 @@ export default function ModelNode({ data, id, selected }: any) {
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium text-slate-500 mb-2 uppercase tracking-wide">Algorithm</label>
+                    <label className="block text-base font-medium text-slate-500 mb-2 uppercase tracking-wide">Algorithm</label>
                     <div className="relative">
                         <select
-                            className="w-full appearance-none bg-slate-50 border border-gray-200 text-slate-700 text-base rounded-lg focus:ring-[#EA4335] focus:border-[#EA4335] block p-3 outline-none transition-colors"
+                            className="w-full appearance-none bg-slate-50 border border-gray-200 text-slate-700 text-lg rounded-lg focus:ring-[#EA4335] focus:border-[#EA4335] block p-3 outline-none transition-colors"
                             onChange={handleModelChange}
                             defaultValue={data.modelType || 'Logistic Regression'}
                         >

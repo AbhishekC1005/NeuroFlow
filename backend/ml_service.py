@@ -157,6 +157,61 @@ class MLService:
             self.X_train = pd.DataFrame(scaler.fit_transform(self.X_train), columns=self.feature_names, index=self.X_train.index)
             self.X_test = pd.DataFrame(scaler.transform(self.X_test), columns=self.feature_names, index=self.X_test.index)
 
+    def analyze_dataset(self, file_content: bytes, filename: str):
+        # Load data
+        file_obj = io.BytesIO(file_content)
+        if filename.endswith('.csv'):
+            df = pd.read_csv(file_obj)
+        elif filename.endswith(('.xls', '.xlsx')):
+            df = pd.read_excel(file_obj)
+        else:
+            raise ValueError("Unsupported file format")
+
+        # 1. Identify Columns
+        numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns.tolist()
+        
+        # 2. Histograms (for top 10 numeric cols to avoid overload)
+        histograms = []
+        for col in numeric_cols[:10]:
+            # Simple binning
+            try:
+                data = df[col].dropna().tolist()
+                if not data: continue
+                # Calculate basic histogram using numpy
+                counts, bin_edges = np.histogram(data, bins=10)
+                hist_data = []
+                for i in range(len(counts)):
+                    hist_data.append({
+                        "bin": f"{bin_edges[i]:.1f} - {bin_edges[i+1]:.1f}",
+                        "count": int(counts[i])
+                    })
+                histograms.append({"column": col, "data": hist_data})
+            except Exception:
+                continue
+
+        # 3. Correlation Matrix (Numeric Only)
+        correlation_matrix = []
+        if len(numeric_cols) > 1:
+            try:
+                corr_df = df[numeric_cols].corr()
+                # Format for Recharts heatmap (flat structure or matrix)
+                # We'll return matrix structure similar to confusion matrix: just values 
+                # But frontend needs x/y labels. Let's send raw matrix of values.
+                # Actually, sending a list of lists is easier for the heatmap grid we built for result node.
+                correlation_matrix = {
+                    "columns": numeric_cols,
+                    "values": corr_df.where(pd.notnull(corr_df), 0).values.tolist()
+                }
+            except Exception:
+                pass
+
+        return {
+            "histograms": histograms,
+            "correlation_matrix": correlation_matrix,
+            "columns": list(df.columns),
+            "rows_count": len(df)
+        }
+
     def train_model(self, model_type: str):
         if self.X_train is None:
             raise ValueError("Data not split")
@@ -222,6 +277,17 @@ class MLService:
             feature_importance = []
             if hasattr(self.model, 'feature_importances_'):
                  feature_importance = [{"name": name, "value": float(val)} for name, val in zip(self.feature_names, self.model.feature_importances_)]
+            elif hasattr(self.model, 'coef_'):
+                 # Logistic Regression coef_ is (n_classes, n_features) or (1, n_features)
+                 coefs = self.model.coef_
+                 # If multi-class, we could take average or max, but for binary/simple let's take mean absolute, or just the first class
+                 if len(coefs.shape) > 1: 
+                     # For simplicity in this overview, we take the mean absolute importance across classes
+                     coefs = np.mean(np.abs(coefs), axis=0)
+                 elif len(coefs.shape) == 1:
+                     coefs = np.abs(coefs)
+                     
+                 feature_importance = [{"name": name, "value": float(val)} for name, val in zip(self.feature_names, coefs)]
 
             return {
                 "accuracy": round(acc, 4),
@@ -269,25 +335,52 @@ class MLService:
              raise ValueError(f"File not found in storage: {dataset.storage_path}")
 
         # 2. Load & Split
-        self.load_and_split(
-            file_content=file_content,
-            filename=dataset.filename,
-            target_column=request.target_column,
-            test_size=request.test_size
-        )
+        try:
+            self.load_and_split(
+                file_content=file_content,
+                filename=dataset.filename,
+                target_column=request.target_column,
+                test_size=request.test_size
+            )
+        except Exception as e:
+            if "not found" in str(e):
+                raise ValueError(f"Target Column Error: {str(e)}\nHINT: Check if '{request.target_column}' is spelled correctly.")
+            raise ValueError(f"Data Loading Error: {str(e)}")
         
         # 3. Preprocess
-        self.apply_preprocessing(
-            imputer_strategy=request.imputer_strategy,
-            encoder_strategy=request.encoder_strategy,
-            scaler_type=request.scaler_type
-        )
+        try:
+            self.apply_preprocessing(
+                imputer_strategy=request.imputer_strategy,
+                encoder_strategy=request.encoder_strategy,
+                scaler_type=request.scaler_type
+            )
+        except ValueError as e:
+            msg = str(e)
+            hint = ""
+            if "could not convert string to float" in msg:
+                hint = "\nHINT: You have text data in a numeric column. Try adding an 'Encoding' node (OneHot or Label) before the model."
+            elif "Input contains NaN" in msg:
+                hint = "\nHINT: Your data has missing values. Try changing the Imputer strategy to 'Mean' or 'Constant'."
+            
+            raise ValueError(f"Preprocessing Error: {msg}{hint}")
+        except Exception as e:
+             raise ValueError(f"Preprocessing Failed: {str(e)}")
         
         # 4. Train
-        self.train_model(request.model_type)
+        try:
+            self.train_model(request.model_type)
+        except Exception as e:
+            msg = str(e)
+            hint = ""
+            if "Unknown label type" in msg:
+                hint = "\nHINT: Your target variable might need encoding if it's categorical."
+            raise ValueError(f"Training Error: {msg}{hint}")
         
         # 5. Evaluate
-        results = self.evaluate()
+        try:
+            results = self.evaluate()
+        except Exception as e:
+             raise ValueError(f"Evaluation Failed: {str(e)}")
         
         # 6. Save results
         pipeline_result = PipelineResult(
