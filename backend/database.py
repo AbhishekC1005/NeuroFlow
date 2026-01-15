@@ -2,7 +2,6 @@
 Database configuration for MongoDB connection using PyMongo.
 """
 import os
-import ssl
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
@@ -13,31 +12,15 @@ MONGODB_URI = os.getenv("MONGODB_URI")
 if not MONGODB_URI:
     raise ValueError("MONGODB_URI environment variable is not set")
 
-# Create SSL context that doesn't verify certificates
-# This is needed for some EC2 instances connecting to MongoDB Atlas
-try:
-    # Try connecting with SSL bypass for certificate verification
-    client = MongoClient(
-        MONGODB_URI,
-        tls=True,
-        tlsAllowInvalidCertificates=True,
-        tlsAllowInvalidHostnames=True,
-        serverSelectionTimeoutMS=30000,
-        connectTimeoutMS=30000
-    )
-    # Test connection
-    client.admin.command('ping')
-except Exception as e:
-    print(f"MongoDB connection error: {e}")
-    # Fallback: try with completely disabled TLS (not recommended for production)
-    try:
-        client = MongoClient(
-            MONGODB_URI.replace("mongodb+srv://", "mongodb://").replace(".mongodb.net/", ".mongodb.net:27017/"),
-            tls=False,
-            serverSelectionTimeoutMS=30000
-        )
-    except:
-        raise ValueError(f"Could not connect to MongoDB: {e}")
+# Create MongoDB client with proper settings for cloud connections
+client = MongoClient(
+    MONGODB_URI,
+    serverSelectionTimeoutMS=30000,
+    connectTimeoutMS=30000,
+    socketTimeoutMS=30000,
+    retryWrites=True,
+    w="majority"
+)
 
 db = client.neuroflow  # Database name
 
