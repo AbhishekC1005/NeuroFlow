@@ -13,6 +13,10 @@ import uvicorn
 import os
 import logging
 import requests
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 import cloudinary
 import cloudinary.uploader
@@ -46,8 +50,12 @@ cloudinary.config(
 
 app = FastAPI(title="NeuroFlow API", description="ML Pipeline Builder with MongoDB + Cloudinary")
 
-# Allow CORS
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000,http://localhost:5175").split(",")
+# Allow CORS - Load from .env only
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+# Clean up whitespace
+ALLOWED_ORIGINS = [o.strip() for o in ALLOWED_ORIGINS if o.strip()]
+
+logger.info(f"CORS Allowed Origins: {ALLOWED_ORIGINS}")
 
 app.add_middleware(
     CORSMiddleware,
