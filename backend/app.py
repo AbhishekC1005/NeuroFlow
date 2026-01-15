@@ -139,7 +139,7 @@ def get_me(current_user: dict = Depends(get_current_user)):
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to NeuroFlow API", "status": "running", "database": "MongoDB", "storage": "Cloudinary"}
+    return {"message": "Welcome to NeuroFlow API", "status": "running", "database": "MongoDB", "storage": "Cloudinary", "version": "1.0.1"}
 
 
 # ==================== Protected Dataset Endpoints ====================
