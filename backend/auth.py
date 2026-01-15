@@ -1,5 +1,6 @@
 """
 Authentication utilities: password hashing, JWT tokens, and user verification.
+Updated for MongoDB.
 """
 import os
 from datetime import datetime, timedelta
@@ -8,18 +9,14 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
-from database import get_db
-from models import User
+from database import users_collection
 
 load_dotenv()
 
 # Configuration
-SECRET_KEY = os.getenv("SECRET_KEY")
-if not SECRET_KEY:
-    raise ValueError("SECRET_KEY environment variable is not set")
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))  # 24 hours
 
@@ -52,13 +49,10 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
-def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
-) -> User:
+def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     """
     Dependency to get the current authenticated user from JWT token.
-    Use with FastAPI's Depends() on protected routes.
+    Returns user document from MongoDB.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -73,21 +67,22 @@ def get_current_user(
     except JWTError:
         raise credentials_exception
     
-    user = db.query(User).filter(User.email == email).first()
+    # Query MongoDB
+    user = users_collection.find_one({"email": email})
     if user is None:
         raise credentials_exception
+    
+    # Convert ObjectId to string for JSON serialization
+    user["id"] = str(user["_id"])
     return user
 
 
-def get_optional_user(
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
-) -> Optional[User]:
+def get_optional_user(token: str = Depends(oauth2_scheme)) -> Optional[dict]:
     """
     Optional user dependency - returns None if no valid token.
     Useful for endpoints that work with or without authentication.
     """
     try:
-        return get_current_user(token, db)
+        return get_current_user(token)
     except HTTPException:
         return None

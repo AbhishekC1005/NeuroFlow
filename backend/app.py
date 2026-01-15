@@ -1,18 +1,30 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Body, Depends, Form
+"""
+NeuroFlow API - FastAPI Backend
+Updated for MongoDB + Cloudinary
+"""
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel, EmailStr, ConfigDict
+from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-from sqlalchemy.orm import Session
-from datetime import timedelta
+from datetime import datetime, timedelta
+from bson import ObjectId
 import uvicorn
 import os
-import uuid
+import logging
+import requests
+
+import cloudinary
+import cloudinary.uploader
 
 from ml_service import MLService
 from chat_service import ChatService
-from database import get_db, engine, Base
-from models import User, Dataset, Workflow, PipelineResult
+from database import users_collection, datasets_collection, workflows_collection, results_collection
+from models import (
+    UserCreate, UserResponse, Token, 
+    PipelineRequest, ChatRequest, AnalyzeRequest,
+    WorkflowCreate, WorkflowResponse
+)
 from auth import (
     get_password_hash, 
     verify_password, 
@@ -21,19 +33,20 @@ from auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
-
-app = FastAPI(title="NeuroFlow API", description="ML Pipeline Builder with Authentication")
-
-# Allow CORS
 # Configure Logging
-import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Configure Cloudinary
+cloudinary.config(
+    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+    api_key=os.getenv("CLOUDINARY_API_KEY"),
+    api_secret=os.getenv("CLOUDINARY_API_SECRET")
+)
+
+app = FastAPI(title="NeuroFlow API", description="ML Pipeline Builder with MongoDB + Cloudinary")
+
 # Allow CORS
-# Read allowed origins from env
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000,http://localhost:5175").split(",")
 
 app.add_middleware(
@@ -47,89 +60,50 @@ app.add_middleware(
 # Global service instances
 ml_service = MLService()
 chat_service = ChatService()
-from supabase import create_client, Client
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
 
-# ==================== Pydantic Schemas ====================
+# ==================== Helper Functions ====================
 
-class UserCreate(BaseModel):
-    email: EmailStr
-    username: str
-    password: str
-
-class UserResponse(BaseModel):
-    id: int
-    email: str
-    username: Optional[str] = None
-    
-    model_config = ConfigDict(from_attributes=True)
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-class PipelineRequest(BaseModel):
-    file_id: str
-    target_column: str
-    scaler_type: str
-    imputer_strategy: Optional[str] = 'mean'
-    encoder_strategy: Optional[str] = 'onehot'
-    test_size: float
-    model_type: str
-    workflow_id: Optional[int] = None
-    workflow_snapshot: Optional[Dict[str, Any]] = None
-
-class ChatRequest(BaseModel):
-    workflow: Dict[str, Any]
-    question: str
-    sample_data: Optional[List[Dict[str, Any]]] = None
-
-class WorkflowCreate(BaseModel):
-    name: str
-    nodes_json: List[Dict[str, Any]]
-    edges_json: List[Dict[str, Any]]
-
-class WorkflowResponse(BaseModel):
-    id: int
-    name: str
-    nodes_json: List[Dict[str, Any]]
-    edges_json: List[Dict[str, Any]]
-    
-    model_config = ConfigDict(from_attributes=True)
+def serialize_doc(doc: dict) -> dict:
+    """Convert MongoDB document to JSON-serializable dict."""
+    if doc is None:
+        return None
+    doc["id"] = str(doc.pop("_id", ""))
+    return doc
 
 
 # ==================== Auth Endpoints ====================
 
 @app.post("/auth/register", response_model=UserResponse)
-def register(user: UserCreate, db: Session = Depends(get_db)):
+def register(user: UserCreate):
     """Register a new user."""
     # Check if email exists
-    db_user_email = db.query(User).filter(User.email == user.email).first()
-    if db_user_email:
+    if users_collection.find_one({"email": user.email}):
         raise HTTPException(status_code=400, detail="Email already registered")
 
     # Check if username exists
-    db_user_username = db.query(User).filter(User.username == user.username).first()
-    if db_user_username:
+    if users_collection.find_one({"username": user.username}):
         raise HTTPException(status_code=400, detail="Username already taken")
     
     # Create new user
     hashed_password = get_password_hash(user.password)
-    new_user = User(email=user.email, username=user.username, hashed_password=hashed_password)
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    return new_user
+    new_user = {
+        "email": user.email,
+        "username": user.username,
+        "hashed_password": hashed_password,
+        "created_at": datetime.utcnow()
+    }
+    result = users_collection.insert_one(new_user)
+    new_user["id"] = str(result.inserted_id)
+    
+    return UserResponse(id=new_user["id"], email=new_user["email"], username=new_user["username"])
 
 
 @app.post("/auth/login", response_model=Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(form_data: OAuth2PasswordRequestForm = Depends()):
     """Login and get access token."""
-    user = db.query(User).filter(User.email == form_data.username).first()
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    user = users_collection.find_one({"email": form_data.username})
+    if not user or not verify_password(form_data.password, user["hashed_password"]):
         raise HTTPException(
             status_code=401,
             detail="Incorrect email or password",
@@ -137,23 +111,27 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         )
     
     access_token = create_access_token(
-        data={"sub": user.email},
+        data={"sub": user["email"]},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
 
 @app.get("/auth/me", response_model=UserResponse)
-def get_me(current_user: User = Depends(get_current_user)):
+def get_me(current_user: dict = Depends(get_current_user)):
     """Get current user info."""
-    return current_user
+    return UserResponse(
+        id=current_user["id"],
+        email=current_user["email"],
+        username=current_user.get("username")
+    )
 
 
 # ==================== Public Endpoints ====================
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to NeuroFlow API", "status": "running"}
+    return {"message": "Welcome to NeuroFlow API", "status": "running", "database": "MongoDB", "storage": "Cloudinary"}
 
 
 # ==================== Protected Dataset Endpoints ====================
@@ -161,61 +139,56 @@ def read_root():
 @app.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: dict = Depends(get_current_user)
 ):
-    """Upload a dataset file to Supabase Storage and save metadata."""
-    if not supabase:
-        raise HTTPException(status_code=500, detail="Supabase not configured")
-        
+    """Upload a dataset file to Cloudinary and save metadata to MongoDB."""
     try:
         content = await file.read()
         
         # 1. Process with ML service to get preview (in memory)
         data = ml_service.load_data(content, file.filename)
         
-        # 2. Upload to Supabase Storage
-        file_path = f"{current_user.id}/{file.filename}"
-        supabase.storage.from_("datasets").upload(
-            file=content,
-            path=file_path,
-            file_options={"upsert": "true"}
+        # 2. Upload to Cloudinary
+        upload_result = cloudinary.uploader.upload(
+            content,
+            resource_type="raw",
+            folder=f"neuroflow/{current_user['id']}",
+            public_id=file.filename.rsplit('.', 1)[0],  # filename without extension
+            overwrite=True
         )
         
-        # 3. Save to database
-        dataset = Dataset(
-            user_id=current_user.id,
-            filename=file.filename,
-            storage_path=file_path,
-            columns=data.get("columns", []),
-            shape={"rows": data.get("shape", [0, 0])[0], "cols": data.get("shape", [0, 0])[1]}
-        )
-        db.add(dataset)
-        db.commit()
-        db.refresh(dataset)
+        # 3. Save to MongoDB
+        dataset = {
+            "user_id": current_user["id"],
+            "filename": file.filename,
+            "cloudinary_url": upload_result["secure_url"],
+            "cloudinary_public_id": upload_result["public_id"],
+            "columns": data.get("columns", []),
+            "shape": {"rows": data.get("shape", [0, 0])[0], "cols": data.get("shape", [0, 0])[1]},
+            "created_at": datetime.utcnow()
+        }
+        result = datasets_collection.insert_one(dataset)
         
         # Return preview with dataset ID
-        data["dataset_id"] = dataset.id
+        data["dataset_id"] = str(result.inserted_id)
         return data
+        
     except Exception as e:
         logger.error(f"Upload Error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/datasets")
-def get_datasets(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+def get_datasets(current_user: dict = Depends(get_current_user)):
     """Get all datasets for the current user."""
-    datasets = db.query(Dataset).filter(Dataset.user_id == current_user.id).all()
+    datasets = datasets_collection.find({"user_id": current_user["id"]})
     return [
         {
-            "id": d.id,
-            "filename": d.filename,
-            "columns": d.columns,
-            "shape": d.shape,
-            "created_at": d.created_at.isoformat() if d.created_at else None
+            "id": str(d["_id"]),
+            "filename": d["filename"],
+            "columns": d.get("columns", []),
+            "shape": d.get("shape", {}),
+            "created_at": d["created_at"].isoformat() if d.get("created_at") else None
         }
         for d in datasets
     ]
@@ -223,126 +196,130 @@ def get_datasets(
 
 @app.delete("/datasets/{dataset_id}")
 def delete_dataset(
-    dataset_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    dataset_id: str,
+    current_user: dict = Depends(get_current_user)
 ):
-    """Delete a dataset."""
-    dataset = db.query(Dataset).filter(
-        Dataset.id == dataset_id, 
-        Dataset.user_id == current_user.id
-    ).first()
+    """Delete a dataset from MongoDB and Cloudinary."""
+    # Find dataset
+    try:
+        dataset = datasets_collection.find_one({
+            "_id": ObjectId(dataset_id),
+            "user_id": current_user["id"]
+        })
+    except:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
     
-    # Delete from Supabase Storage
-    if supabase:
-        try:
-            supabase.storage.from_("datasets").remove([dataset.storage_path])
-        except Exception as e:
-            logger.error(f"Storage Delete Error: {e}")
+    # Delete from Cloudinary
+    try:
+        cloudinary.uploader.destroy(dataset["cloudinary_public_id"], resource_type="raw")
+    except Exception as e:
+        logger.error(f"Cloudinary Delete Error: {e}")
 
-    db.delete(dataset)
-    db.commit()
-    db.delete(dataset)
-    db.commit()
+    # Delete from MongoDB
+    datasets_collection.delete_one({"_id": ObjectId(dataset_id)})
     return {"message": "Dataset deleted"}
 
 
 # ==================== Analysis Endpoints ====================
 
-class AnalyzeRequest(BaseModel):
-    file_id: str
-
 @app.post("/analyze")
 async def analyze_dataset(
     request: AnalyzeRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: dict = Depends(get_current_user)
 ):
-    """Analyze dataset for histograms and correlations (protected)."""
+    """Analyze dataset for histograms and correlations."""
     try:
-        if not supabase:
-             raise HTTPException(status_code=500, detail="Supabase not configured")
-
-        # Fetch Dataset
+        # Fetch Dataset from MongoDB
         dataset = None
         try:
-             dataset_id = int(request.file_id.strip())
-             dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
-        except ValueError:
-             pass
+            dataset = datasets_collection.find_one({"_id": ObjectId(request.file_id)})
+        except:
+            pass
         
         if not dataset:
-             dataset = db.query(Dataset).filter(Dataset.filename == request.file_id).first()
+            dataset = datasets_collection.find_one({"filename": request.file_id})
 
         if not dataset:
-             raise HTTPException(status_code=404, detail="Dataset not found")
+            raise HTTPException(status_code=404, detail="Dataset not found")
 
-        # Download content
+        # Download from Cloudinary
         try:
-             res = supabase.storage.from_("datasets").download(dataset.storage_path)
-             file_content = res
+            response = requests.get(dataset["cloudinary_url"])
+            file_content = response.content
         except Exception:
-             raise HTTPException(status_code=404, detail="File not found in storage")
+            raise HTTPException(status_code=404, detail="File not found in storage")
 
         # Analyze
-        analysis = ml_service.analyze_dataset(file_content, dataset.filename)
+        analysis = ml_service.analyze_dataset(file_content, dataset["filename"])
         return analysis
 
     except ValueError as e:
-         raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-         logger.error(f"Analysis Error: {e}")
-         raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Analysis Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ==================== Protected Workflow Endpoints ====================
 
-@app.get("/workflows", response_model=List[WorkflowResponse])
-def get_workflows(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+@app.get("/workflows")
+def get_workflows(current_user: dict = Depends(get_current_user)):
     """Get all workflows for the current user."""
-    return db.query(Workflow).filter(Workflow.user_id == current_user.id).all()
+    workflows = workflows_collection.find({"user_id": current_user["id"]})
+    return [
+        WorkflowResponse(
+            id=str(w["_id"]),
+            name=w["name"],
+            nodes_json=w.get("nodes_json", []),
+            edges_json=w.get("edges_json", [])
+        )
+        for w in workflows
+    ]
 
 
 @app.post("/workflows", response_model=WorkflowResponse)
 def create_workflow(
     workflow: WorkflowCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: dict = Depends(get_current_user)
 ):
     """Save a new workflow."""
-    new_workflow = Workflow(
-        user_id=current_user.id,
+    new_workflow = {
+        "user_id": current_user["id"],
+        "name": workflow.name,
+        "nodes_json": workflow.nodes_json,
+        "edges_json": workflow.edges_json,
+        "created_at": datetime.utcnow()
+    }
+    result = workflows_collection.insert_one(new_workflow)
+    
+    return WorkflowResponse(
+        id=str(result.inserted_id),
         name=workflow.name,
         nodes_json=workflow.nodes_json,
         edges_json=workflow.edges_json
     )
-    db.add(new_workflow)
-    db.commit()
-    db.refresh(new_workflow)
-    return new_workflow
 
 
 @app.delete("/workflows/{workflow_id}")
 def delete_workflow(
-    workflow_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    workflow_id: str,
+    current_user: dict = Depends(get_current_user)
 ):
     """Delete a workflow."""
-    workflow = db.query(Workflow).filter(
-        Workflow.id == workflow_id,
-        Workflow.user_id == current_user.id
-    ).first()
-    if not workflow:
+    try:
+        result = workflows_collection.delete_one({
+            "_id": ObjectId(workflow_id),
+            "user_id": current_user["id"]
+        })
+    except:
         raise HTTPException(status_code=404, detail="Workflow not found")
     
-    db.delete(workflow)
-    db.commit()
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    
     return {"message": "Workflow deleted"}
 
 
@@ -351,20 +328,14 @@ def delete_workflow(
 @app.post("/run_pipeline")
 async def run_pipeline(
     request: PipelineRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: dict = Depends(get_current_user)
 ):
-    """Run ML pipeline (protected)."""
+    """Run ML pipeline."""
     try:
-        if not supabase:
-            raise HTTPException(status_code=500, detail="Supabase not configured")
-
-        # Delegate to MLService
-        results = ml_service.run_pipeline(db, supabase, request, current_user.id)
+        results = ml_service.run_pipeline(request, current_user["id"])
         return results
-
     except ValueError as e:
-         raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Pipeline Execution Error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -373,55 +344,37 @@ async def run_pipeline(
 @app.post("/run_pipeline_batch")
 async def run_pipeline_batch(
     requests: Dict[str, PipelineRequest],
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: dict = Depends(get_current_user)
 ):
-    """Run batch ML pipeline (protected)."""
-    if not supabase:
-        raise HTTPException(status_code=500, detail="Supabase not configured")
-
+    """Run batch ML pipeline."""
     batch_results = {}
     
     for result_node_id, request in requests.items():
         try:
-            # Create fresh service instance for each node in batch to avoid state collision
-            # OR refactor MLService to be stateless/per-request.
-            # For now, using new instance is safer.
             service = MLService()
-            
-            results = service.run_pipeline(
-                db=db, 
-                supabase=supabase, 
-                request=request, 
-                user_id=current_user.id
-            )
+            results = service.run_pipeline(request, current_user["id"])
             batch_results[result_node_id] = results
-            
         except Exception as e:
             logger.error(f"Error processing node {result_node_id}: {e}")
             batch_results[result_node_id] = {"error": str(e)}
     
-    db.commit() # Commit all results at once after the loop
     return batch_results
 
 
 @app.get("/history")
-def get_history(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+def get_history(current_user: dict = Depends(get_current_user)):
     """Get pipeline execution history for the current user."""
-    results = db.query(PipelineResult).filter(
-        PipelineResult.user_id == current_user.id
-    ).order_by(PipelineResult.created_at.desc()).all()
+    results = results_collection.find(
+        {"user_id": current_user["id"]}
+    ).sort("created_at", -1)
     
     return [
         {
-            "id": r.id,
-            "created_at": r.created_at.isoformat() if r.created_at else None,
-            "workflow_id": r.workflow_id,
-            "results_summary": r.results_json,  # We might want to summarize this if it's huge, but full JSON is fine for now
-            "workflow_snapshot": r.workflow_snapshot
+            "id": str(r["_id"]),
+            "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
+            "workflow_id": r.get("workflow_id"),
+            "results_summary": r.get("results_json", {}),
+            "workflow_snapshot": r.get("workflow_snapshot")
         }
         for r in results
     ]
@@ -430,9 +383,9 @@ def get_history(
 @app.post("/chat")
 async def chat_endpoint(
     request: ChatRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
-    """Chat with AI about workflow (protected)."""
+    """Chat with AI about workflow."""
     try:
         response_data = chat_service.get_response(request.workflow, request.question, request.sample_data)
         return response_data

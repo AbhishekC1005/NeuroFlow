@@ -1,69 +1,158 @@
 """
-SQLAlchemy models for User, Dataset, Workflow, and PipelineResult.
+Pydantic models for MongoDB documents.
+These replace SQLAlchemy ORM models.
 """
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, LargeBinary, JSON
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
-from database import Base
+from pydantic import BaseModel, Field, EmailStr, ConfigDict
+from typing import Optional, List, Dict, Any
+from datetime import datetime
+from bson import ObjectId
 
 
-class User(Base):
-    __tablename__ = "users"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    email = Column(String(255), unique=True, index=True, nullable=False)
-    username = Column(String(50), unique=True, index=True, nullable=True) # Added username
-    hashed_password = Column(String(255), nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    # Relationships
-    datasets = relationship("Dataset", back_populates="owner", cascade="all, delete-orphan")
-    workflows = relationship("Workflow", back_populates="owner", cascade="all, delete-orphan")
-    pipeline_results = relationship("PipelineResult", back_populates="owner", cascade="all, delete-orphan")
+class PyObjectId(str):
+    """Custom type for MongoDB ObjectId."""
+    @classmethod
+    def __get_pydantic_core_schema__(cls, _source_type, _handler):
+        from pydantic_core import core_schema
+        return core_schema.str_schema()
+
+    @classmethod
+    def validate(cls, v):
+        if not ObjectId.is_valid(v):
+            raise ValueError("Invalid ObjectId")
+        return str(v)
 
 
-class Dataset(Base):
-    __tablename__ = "datasets"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    filename = Column(String(255), nullable=False)
-    storage_path = Column(String(512), nullable=False)  # Path in Supabase Storage
-    columns = Column(JSON)  # Store column names as JSON array
-    shape = Column(JSON)  # Store shape as {"rows": x, "cols": y}
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    # Relationship
-    owner = relationship("User", back_populates="datasets")
+# ==================== User Models ====================
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    username: str
+    password: str
 
 
-class Workflow(Base):
-    __tablename__ = "workflows"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    name = Column(String(255), nullable=False)
-    nodes_json = Column(JSON)  # Store ReactFlow nodes
-    edges_json = Column(JSON)  # Store ReactFlow edges
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
-    # Relationship
-    owner = relationship("User", back_populates="workflows")
+class UserInDB(BaseModel):
+    id: Optional[str] = Field(default=None, alias="_id")
+    email: str
+    username: str
+    hashed_password: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 
-class PipelineResult(Base):
-    __tablename__ = "pipeline_results"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    workflow_id = Column(Integer, ForeignKey("workflows.id", ondelete="SET NULL"), nullable=True)
-    results_json = Column(JSON)  # Store ML results
-    workflow_snapshot = Column(JSON, nullable=True) # Store exact workflow state
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    # Relationship
-    owner = relationship("User", back_populates="pipeline_results")
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    username: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
+# ==================== Dataset Models ====================
 
+class DatasetInDB(BaseModel):
+    id: Optional[str] = Field(default=None, alias="_id")
+    user_id: str
+    filename: str
+    cloudinary_url: str
+    cloudinary_public_id: str
+    columns: List[str] = []
+    shape: Dict[str, int] = {}
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+
+
+class DatasetResponse(BaseModel):
+    id: str
+    filename: str
+    columns: List[str]
+    shape: Dict[str, int]
+    created_at: Optional[str] = None
+
+
+# ==================== Workflow Models ====================
+
+class WorkflowCreate(BaseModel):
+    name: str
+    nodes_json: List[Dict[str, Any]]
+    edges_json: List[Dict[str, Any]]
+
+
+class WorkflowInDB(BaseModel):
+    id: Optional[str] = Field(default=None, alias="_id")
+    user_id: str
+    name: str
+    nodes_json: List[Dict[str, Any]] = []
+    edges_json: List[Dict[str, Any]] = []
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+
+
+class WorkflowResponse(BaseModel):
+    id: str
+    name: str
+    nodes_json: List[Dict[str, Any]]
+    edges_json: List[Dict[str, Any]]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ==================== Pipeline Result Models ====================
+
+class PipelineResultInDB(BaseModel):
+    id: Optional[str] = Field(default=None, alias="_id")
+    user_id: str
+    workflow_id: Optional[str] = None
+    results_json: Dict[str, Any] = {}
+    workflow_snapshot: Optional[Dict[str, Any]] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+
+
+# ==================== Request/Response Models ====================
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class PipelineRequest(BaseModel):
+    file_id: str
+    target_column: str
+    scaler_type: str
+    imputer_strategy: Optional[str] = 'mean'
+    encoder_strategy: Optional[str] = 'onehot'
+    test_size: float
+    model_type: str
+    workflow_id: Optional[str] = None
+    workflow_snapshot: Optional[Dict[str, Any]] = None
+
+
+class ChatRequest(BaseModel):
+    workflow: Dict[str, Any]
+    question: str
+    sample_data: Optional[List[Dict[str, Any]]] = None
+
+
+class AnalyzeRequest(BaseModel):
+    file_id: str

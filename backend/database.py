@@ -1,35 +1,38 @@
 """
-Database configuration for PostgreSQL connection using SQLAlchemy.
+Database configuration for MongoDB connection using PyMongo.
 """
 import os
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from pymongo import MongoClient
 from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+MONGODB_URI = os.getenv("MONGODB_URI")
 
-# Handle Render's postgres:// vs postgresql:// URL format
-if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+if not MONGODB_URI:
+    raise ValueError("MONGODB_URI environment variable is not set")
 
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL environment variable is not set")
+# Connect to MongoDB
+client = MongoClient(MONGODB_URI)
+db = client.neuroflow  # Database name
 
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+# Collections (equivalent to tables)
+users_collection = db.users
+datasets_collection = db.datasets
+workflows_collection = db.workflows
+results_collection = db.pipeline_results
+
+# Create indexes for better query performance
+users_collection.create_index("email", unique=True)
+users_collection.create_index("username", unique=True)
+datasets_collection.create_index("user_id")
+workflows_collection.create_index("user_id")
+results_collection.create_index("user_id")
 
 
 def get_db():
     """
-    Dependency that provides a database session.
-    Use with FastAPI's Depends().
+    Returns the database instance.
+    For MongoDB, we don't need session management like SQLAlchemy.
     """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    return db
