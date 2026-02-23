@@ -1,76 +1,67 @@
-
-import React from 'react';
+import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
-import { Binary, Trash2, Plus } from 'lucide-react';
+import { Binary, X } from 'lucide-react';
+import StepPreview from './StepPreview';
 
-export default function EncodingNode({ data, id, selected }: any) {
-    const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        data.onChange(id, { ...data, strategy: e.target.value });
+interface EncodingNodeProps {
+    id: string;
+    data: any;
+}
+
+function EncodingNode({ id, data }: EncodingNodeProps) {
+    const strategy = data.strategy || 'onehot';
+
+    const onChange = (value: string) => {
+        data.onChange?.(id, { ...data, strategy: value });
     };
 
     return (
-        <div className={`bg-white rounded-xl shadow-lg border-2 border-[#8B5CF6] w-72 overflow-hidden transition-all group ${selected ? 'ring-2 ring-offset-2 ring-[#8B5CF6] shadow-[0_0_20px_rgba(139,92,246,0.4)]' : 'hover:shadow-[#8B5CF6]/20'}`}>
-            {/* Custom Target Handle (Left) */}
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 z-50 flex items-center justify-center w-8 h-8">
-                <Handle
-                    type="target"
-                    position={Position.Left}
-                    className="!w-8 !h-8 !opacity-0 !rounded-full !bg-transparent z-10 cursor-crosshair"
-                />
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-3 h-3 bg-[#8B5CF6] border-2 border-white rounded-full transition-all duration-300 group-hover:scale-0 group-hover:opacity-0 shadow-sm" />
-                    <div className="absolute w-6 h-6 bg-[#8B5CF6] rounded-full text-white flex items-center justify-center shadow-lg transform scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300">
-                        <Plus size={14} strokeWidth={3} />
-                    </div>
-                </div>
-            </div>
-
-            <div className="bg-[#8B5CF6] px-5 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-white/20 rounded-lg text-white">
-                        <Binary size={18} />
-                    </div>
-                    <span className="font-semibold text-white text-lg">Encoding</span>
+        <div className="bg-white rounded-2xl shadow-lg border-2 border-violet-200 min-w-[220px] overflow-hidden hover:shadow-xl transition-all duration-200">
+            <div className="bg-gradient-to-r from-violet-500 to-purple-500 px-4 py-2.5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <Binary size={16} className="text-white" />
+                    <span className="text-white font-semibold text-sm">Encoding</span>
                 </div>
                 <button
-                    onClick={() => data.onDelete(id)}
-                    className="text-white/70 hover:text-white transition-colors p-1.5 rounded hover:bg-white/20"
+                    onClick={() => data.onDelete?.(id)}
+                    className="text-white/70 hover:text-white transition-colors"
                 >
-                    <Trash2 size={18} />
+                    <X size={14} />
                 </button>
             </div>
 
-            <div className="p-4">
-                <label className="block text-sm font-medium text-slate-500 mb-1.5 uppercase tracking-wide">Encoding Strategy</label>
-                <div className="relative group/select">
+            <div className="p-4 space-y-3">
+                <div>
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">
+                        Encoding Strategy
+                    </label>
                     <select
-                        className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-base rounded-lg focus:ring-[#8B5CF6] focus:border-[#8B5CF6] block p-2.5 appearance-none cursor-pointer transition-all hover:border-[#8B5CF6]"
-                        value={data.strategy || 'onehot'}
-                        onChange={handleChange}
+                        value={strategy}
+                        onChange={(e) => onChange(e.target.value)}
+                        onPointerDownCapture={(e) => e.stopPropagation()}
+                        className="nodrag nopan w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 focus:ring-2 focus:ring-violet-400 focus:border-transparent transition-all"
                     >
                         <option value="onehot">One-Hot Encoding</option>
                         <option value="label">Label Encoding</option>
+                        <option value="target">Target Encoding</option>
+                        <option value="frequency">Frequency Encoding</option>
                     </select>
-                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400 group-hover/select:text-[#8B5CF6] transition-colors">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </div>
                 </div>
+
+                <div className="text-xs text-slate-400 italic pt-1">
+                    {strategy === 'onehot' && 'Creates binary columns for each category'}
+                    {strategy === 'label' && 'Assigns integer labels to categories'}
+                    {strategy === 'target' && 'Encodes using target variable mean'}
+                    {strategy === 'frequency' && 'Encodes using category frequency'}
+                </div>
+
+                {data.stepPreview && <StepPreview stepPreview={data.stepPreview} accentColor="#8B5CF6" />}
             </div>
 
-            {/* Custom Source Handle (Right) */}
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-50 flex items-center justify-center w-8 h-8">
-                <Handle
-                    type="source"
-                    position={Position.Right}
-                    className="!w-8 !h-8 !opacity-0 !rounded-full !bg-transparent z-10 cursor-crosshair"
-                />
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-3 h-3 bg-[#8B5CF6] border-2 border-white rounded-full transition-all duration-300 group-hover:scale-0 group-hover:opacity-0 shadow-sm" />
-                    <div className="absolute w-6 h-6 bg-[#8B5CF6] rounded-full text-white flex items-center justify-center shadow-lg transform scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300">
-                        <Plus size={14} strokeWidth={3} />
-                    </div>
-                </div>
-            </div>
+            <Handle type="target" position={Position.Left} className="!bg-violet-500 !w-3 !h-3 !border-2 !border-white" />
+            <Handle type="source" position={Position.Right} className="!bg-violet-500 !w-3 !h-3 !border-2 !border-white" />
         </div>
     );
 }
+
+export default memo(EncodingNode);

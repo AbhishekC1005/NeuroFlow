@@ -4,7 +4,8 @@ These replace SQLAlchemy ORM models.
 """
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
+from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_validator
 from bson import ObjectId
 
 
@@ -35,7 +36,7 @@ class UserInDB(BaseModel):
     email: str
     username: str
     hashed_password: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -62,7 +63,7 @@ class DatasetInDB(BaseModel):
     cloudinary_public_id: str
     columns: List[str] = []
     shape: Dict[str, int] = {}
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -93,7 +94,7 @@ class WorkflowInDB(BaseModel):
     name: str
     nodes_json: List[Dict[str, Any]] = []
     edges_json: List[Dict[str, Any]] = []
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(
@@ -120,7 +121,7 @@ class PipelineResultInDB(BaseModel):
     workflow_id: Optional[str] = None
     results_json: Dict[str, Any] = {}
     workflow_snapshot: Optional[Dict[str, Any]] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -146,6 +147,44 @@ class PipelineRequest(BaseModel):
     model_type: str
     workflow_id: Optional[str] = None
     workflow_snapshot: Optional[Dict[str, Any]] = None
+
+    # Split enhancements
+    stratified: Optional[bool] = False
+    random_state: Optional[int] = 42
+    shuffle: Optional[bool] = True
+
+    # Duplicate Removal Node
+    duplicate_handling: Optional[str] = 'none'  # 'all', 'first', 'last', 'none'
+
+    # Outlier Handling Node
+    outlier_method: Optional[str] = 'none'  # 'iqr', 'zscore', 'none'
+    outlier_action: Optional[str] = 'clip'  # 'clip', 'remove', 'none'
+
+    # Feature Selection Node
+    feature_selection_method: Optional[str] = 'none'  # 'variance', 'correlation', 'both', 'none'
+    variance_threshold: Optional[float] = 0.01
+    correlation_threshold: Optional[float] = 0.95
+
+    # Cross-Validation Node
+    cv_folds: Optional[int] = 0  # 0 = disabled, 3/5/10
+    cv_stratified: Optional[bool] = True
+
+    # PCA Node
+    pca_components: Optional[int] = 0  # 0 = disabled
+
+    # Feature Engineering Node
+    feature_engineering_method: Optional[str] = 'none'  # 'polynomial', 'log', 'sqrt', 'none'
+    polynomial_degree: Optional[int] = 2
+
+    # Class Balancing Node
+    class_balancing: Optional[str] = 'none'  # 'smote', 'oversample', 'undersample', 'class_weight', 'none'
+
+    @field_validator('test_size')
+    @classmethod
+    def validate_test_size(cls, v: float) -> float:
+        if not (0.0 < v < 1.0):
+            raise ValueError('test_size must be between 0.0 and 1.0')
+        return v
 
 
 class ChatRequest(BaseModel):

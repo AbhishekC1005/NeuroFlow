@@ -1,54 +1,45 @@
-
-import React from 'react';
+import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
-import { Pipette, Trash2, Plus } from 'lucide-react';
+import { Pipette, X } from 'lucide-react';
+import StepPreview from './StepPreview';
 
-export default function ImputationNode({ data, id, selected }: any) {
-    const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        data.onChange(id, { ...data, strategy: e.target.value });
+interface ImputationNodeProps {
+    id: string;
+    data: any;
+}
+
+function ImputationNode({ id, data }: ImputationNodeProps) {
+    const strategy = data.strategy || 'mean';
+
+    const onChange = (value: string) => {
+        data.onChange?.(id, { ...data, strategy: value });
     };
 
     return (
-        <div className={`bg-white rounded-xl shadow-lg border-2 border-[#F97316] w-72 overflow-hidden transition-all group ${selected ? 'ring-2 ring-offset-2 ring-[#F97316] shadow-[0_0_20px_rgba(249,115,22,0.4)]' : 'hover:shadow-[#F97316]/20'}`}>
-            {/* Custom Target Handle (Left) */}
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 z-50 flex items-center justify-center w-8 h-8">
-                {/* Interactive Handle */}
-                <Handle
-                    type="target"
-                    position={Position.Left}
-                    className="!w-8 !h-8 !opacity-0 !rounded-full !bg-transparent z-10 cursor-crosshair"
-                />
-                {/* Visuals */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-3 h-3 bg-[#F97316] border-2 border-white rounded-full transition-all duration-300 group-hover:scale-0 group-hover:opacity-0 shadow-sm" />
-                    <div className="absolute w-6 h-6 bg-[#F97316] rounded-full text-white flex items-center justify-center shadow-lg transform scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300">
-                        <Plus size={14} strokeWidth={3} />
-                    </div>
-                </div>
-            </div>
-
-            <div className="bg-[#F97316] px-5 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-white/20 rounded-lg text-white">
-                        <Pipette size={18} />
-                    </div>
-                    <span className="font-semibold text-white text-lg">Missing Values</span>
+        <div className="bg-white rounded-2xl shadow-lg border-2 border-orange-200 min-w-[220px] overflow-hidden hover:shadow-xl transition-all duration-200">
+            <div className="bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-2.5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <Pipette size={16} className="text-white" />
+                    <span className="text-white font-semibold text-sm">Missing Values</span>
                 </div>
                 <button
-                    onClick={() => data.onDelete(id)}
-                    className="text-white/70 hover:text-white transition-colors p-1.5 rounded hover:bg-white/20"
+                    onClick={() => data.onDelete?.(id)}
+                    className="text-white/70 hover:text-white transition-colors"
                 >
-                    <Trash2 size={18} />
+                    <X size={14} />
                 </button>
             </div>
 
-            <div className="p-4">
-                <label className="block text-sm font-medium text-slate-500 mb-1.5 uppercase tracking-wide">Imputation Strategy</label>
-                <div className="relative group/select">
+            <div className="p-4 space-y-3">
+                <div>
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">
+                        Imputation Strategy
+                    </label>
                     <select
-                        className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-base rounded-lg focus:ring-[#F97316] focus:border-[#F97316] block p-2.5 appearance-none cursor-pointer transition-all hover:border-[#F97316]"
-                        value={data.strategy || 'mean'}
-                        onChange={handleChange}
+                        value={strategy}
+                        onChange={(e) => onChange(e.target.value)}
+                        onPointerDownCapture={(e) => e.stopPropagation()}
+                        className="nodrag nopan w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 focus:ring-2 focus:ring-orange-400 focus:border-transparent transition-all"
                     >
                         <option value="mean">Mean (Average)</option>
                         <option value="median">Median (Middle Value)</option>
@@ -56,26 +47,23 @@ export default function ImputationNode({ data, id, selected }: any) {
                         <option value="constant">Zero (Constant 0)</option>
                         <option value="drop">Drop Rows</option>
                     </select>
-                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400 group-hover/select:text-[#F97316] transition-colors">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </div>
                 </div>
+
+                <div className="text-xs text-slate-400 italic pt-1">
+                    {strategy === 'mean' && 'Fills gaps with column average'}
+                    {strategy === 'median' && 'Fills gaps with middle value'}
+                    {strategy === 'most_frequent' && 'Fills gaps with most common value'}
+                    {strategy === 'constant' && 'Fills all missing values with 0'}
+                    {strategy === 'drop' && 'Removes rows with any missing values'}
+                </div>
+
+                {data.stepPreview && <StepPreview stepPreview={data.stepPreview} accentColor="#F97316" />}
             </div>
 
-            {/* Custom Source Handle (Right) */}
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-50 flex items-center justify-center w-8 h-8">
-                <Handle
-                    type="source"
-                    position={Position.Right}
-                    className="!w-8 !h-8 !opacity-0 !rounded-full !bg-transparent z-10 cursor-crosshair"
-                />
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-3 h-3 bg-[#F97316] border-2 border-white rounded-full transition-all duration-300 group-hover:scale-0 group-hover:opacity-0 shadow-sm" />
-                    <div className="absolute w-6 h-6 bg-[#F97316] rounded-full text-white flex items-center justify-center shadow-lg transform scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300">
-                        <Plus size={14} strokeWidth={3} />
-                    </div>
-                </div>
-            </div>
+            <Handle type="target" position={Position.Left} className="!bg-orange-500 !w-3 !h-3 !border-2 !border-white" />
+            <Handle type="source" position={Position.Right} className="!bg-orange-500 !w-3 !h-3 !border-2 !border-white" />
         </div>
     );
 }
+
+export default memo(ImputationNode);

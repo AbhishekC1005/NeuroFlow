@@ -3,6 +3,7 @@ export interface PipelineResult {
     accuracy?: number;
     r2_score?: number;
     mse?: number;
+    rmse?: number;
     mae?: number;
     classification_report?: any;
     confusion_matrix?: any;

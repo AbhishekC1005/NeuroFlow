@@ -5,7 +5,12 @@ import logo from '../assets/image.png';
 
 type Section = 'preprocessing' | 'ml-basics' | 'neural-networks' | 'evaluation';
 
-export default function DocumentationPage() {
+interface DocumentationPageProps {
+    isModal?: boolean;
+    onClose?: () => void;
+}
+
+export default function DocumentationPage({ isModal, onClose }: DocumentationPageProps) {
     const [activeSection, setActiveSection] = useState<Section>('ml-basics');
     const location = useLocation();
     const fromWorkspace = location.state?.from === 'workspace';
@@ -13,36 +18,41 @@ export default function DocumentationPage() {
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col font-['Outfit',_'Inter',_sans-serif]">
             {/* Navbar */}
-            <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-100">
-                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#4285F4] via-[#EA4335] via-[#FBBC05] to-[#34A853]" />
-                <div className="max-w-7xl mx-auto px-6 lg:px-8 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-6">
-                        <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-                            <img src={logo} alt="FlowML" className="h-8 w-auto" />
-                            <div className="hidden sm:block">
-                                <span className="text-xl font-medium text-gray-800">
-                                    <span className="text-[#4285F4]">Flow</span>
-                                    <span className="text-[#34A853]">ML</span>
-                                </span>
-                                <span className="ml-2 text-sm text-gray-400 font-normal border-l border-gray-200 pl-2">Docs</span>
-                            </div>
-                        </Link>
+            {/* Navbar - Only show if not modal */}
+            {!isModal && (
+                <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-100">
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#4285F4] via-[#EA4335] via-[#FBBC05] to-[#34A853]" />
+                    <div className="max-w-7xl mx-auto px-6 lg:px-8 py-3 flex items-center justify-between">
+                        <div className="flex items-center gap-6">
+                            <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+                                <img src={logo} alt="FlowML" className="h-8 w-auto" />
+                                <div className="hidden sm:block">
+                                    <span className="text-xl font-medium text-gray-800">
+                                        <span className="text-[#4285F4]">Flow</span>
+                                        <span className="text-[#34A853]">ML</span>
+                                    </span>
+                                    <span className="ml-2 text-sm text-gray-400 font-normal border-l border-gray-200 pl-2">Docs</span>
+                                </div>
+                            </Link>
+                        </div>
                     </div>
-                </div>
-            </nav>
+                </nav>
+            )}
 
-            <div className="max-w-7xl mx-auto px-6 lg:px-8 pt-8">
-                {fromWorkspace ? (
-                    <Link to="/workspace" className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-900 transition-colors">
-                        <ArrowLeft size={18} />
-                        <span className="text-sm font-medium">Back to Workspace</span>
-                    </Link>
-                ) : (
-                    <Link to="/" className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-900 transition-colors">
-                        <ArrowLeft size={18} />
-                        <span className="text-sm font-medium">Back to Home</span>
-                    </Link>
-                )}
+            <div className={`max-w-7xl mx-auto px-6 lg:px-8 ${isModal ? 'pt-4' : 'pt-8'}`}>
+                {!isModal ? (
+                    fromWorkspace ? (
+                        <Link to="/workspace" className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-900 transition-colors">
+                            <ArrowLeft size={18} />
+                            <span className="text-sm font-medium">Back to Workspace</span>
+                        </Link>
+                    ) : (
+                        <Link to="/" className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-900 transition-colors">
+                            <ArrowLeft size={18} />
+                            <span className="text-sm font-medium">Back to Home</span>
+                        </Link>
+                    )
+                ) : null}
             </div>
 
             <div className="flex-1 max-w-7xl mx-auto w-full px-6 lg:px-8 py-8 flex gap-8">

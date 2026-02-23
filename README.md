@@ -28,8 +28,8 @@ graph TD
     end
     
     subgraph Infrastructure
-        DB[(PostgreSQL)]
-        Storage[Supabase Storage]
+        DB[(MongoDB)]
+        Storage[Cloudinary]
         AI[OpenAI GPT-4o]
     end
 
@@ -103,8 +103,8 @@ FlowML wraps standard Python exceptions to provide actionable guidance. Instead 
 ### Backend
 - **API Framework**: FastAPI (Python 3.10+)
 - **Machine Learning**: Scikit-Learn, Pandas, NumPy
-- **Database**: PostgreSQL (via SQLAlchemy)
-- **Object Storage**: Supabase
+- **Database**: MongoDB (via PyMongo)
+- **Object Storage**: Cloudinary
 - **AI Model**: OpenAI GPT-4o
 
 ---
@@ -114,7 +114,8 @@ FlowML wraps standard Python exceptions to provide actionable guidance. Instead 
 ### Prerequisites
 - Node.js 18+
 - Python 3.10+
-- PostgreSQL Database
+- MongoDB Database
+- Cloudinary Account
 - OpenAI API Key
 
 ### Backend Installation
@@ -141,9 +142,11 @@ FlowML wraps standard Python exceptions to provide actionable guidance. Instead 
 4. Configure environment variables in a `.env` file:
    ```env
    OPENAI_API_KEY=your_key
-   DATABASE_URL=postgresql://user:pass@localhost/dbname
-   SUPABASE_URL=your_url
-   SUPABASE_KEY=your_key
+   MONGODB_URI=your_mongodb_uri
+   CLOUDINARY_CLOUD_NAME=your_name
+   CLOUDINARY_API_KEY=your_key
+   CLOUDINARY_API_SECRET=your_secret
+   SECRET_KEY=your_secure_random_key
    ```
 
 5. Start the server:

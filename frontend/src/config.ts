@@ -8,6 +8,13 @@ export const NODE_COLORS: Record<string, string> = {
     split: '#d946ef',
     model: '#f43f5e',
     result: '#10b981',
+    outlier: '#f59e0b',
+    featureSelection: '#14b8a6',
+    duplicate: '#f43f5e',
+    crossValidation: '#6366f1',
+    pca: '#0ea5e9',
+    featureEngineering: '#84cc16',
+    classBalancing: '#d946ef',
     default: '#64748b'
 };
 

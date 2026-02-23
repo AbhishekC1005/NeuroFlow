@@ -1,104 +1,102 @@
-
-import React from 'react';
+import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
-import { BrainCircuit, Trash2, Plus } from 'lucide-react';
+import { BrainCircuit, X } from 'lucide-react';
+import StepPreview from './StepPreview';
 
-export default function ModelNode({ data, id, selected }: any) {
-    const handleTargetChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        data.onChange(id, { ...data, targetColumn: e.target.value });
-    };
+interface ModelNodeProps {
+    id: string;
+    data: any;
+}
 
-    const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        data.onChange(id, { ...data, modelType: e.target.value });
+function ModelNode({ id, data }: ModelNodeProps) {
+    const targetColumn = data.targetColumn || '';
+    const modelType = data.modelType || 'Logistic Regression';
+
+    const onChange = (field: string, value: string) => {
+        data.onChange?.(id, { ...data, [field]: value });
     };
 
     return (
-        <div className={`bg-white rounded-xl shadow-lg border-2 border-[#EA4335] w-80 overflow-hidden transition-all group ${selected ? 'ring-2 ring-offset-2 ring-[#EA4335] shadow-[0_0_20px_rgba(234,67,53,0.4)]' : 'hover:shadow-[#EA4335]/20'}`}>
-            {/* Custom Target Handle (Left) */}
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 z-50 flex items-center justify-center w-8 h-8">
-                <Handle
-                    type="target"
-                    position={Position.Left}
-                    className="!w-8 !h-8 !opacity-0 !rounded-full !bg-transparent z-10 cursor-crosshair"
-                />
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-3 h-3 bg-[#EA4335] border-2 border-white rounded-full transition-all duration-300 group-hover:scale-0 group-hover:opacity-0 shadow-sm" />
-                    <div className="absolute w-6 h-6 bg-[#EA4335] rounded-full text-white flex items-center justify-center shadow-lg transform scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300">
-                        <Plus size={14} strokeWidth={3} />
-                    </div>
-                </div>
-            </div>
-
-            <div className="bg-[#EA4335] px-5 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-white/20 rounded-lg text-white">
-                        <BrainCircuit size={18} />
-                    </div>
-                    <span className="font-semibold text-white text-lg">Model Training</span>
+        <div className="bg-white rounded-2xl shadow-lg border-2 border-red-200 min-w-[240px] overflow-hidden hover:shadow-xl transition-all duration-200">
+            <div className="bg-gradient-to-r from-red-500 to-rose-500 px-4 py-2.5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <BrainCircuit size={16} className="text-white" />
+                    <span className="text-white font-semibold text-sm">Model Training</span>
                 </div>
                 <button
-                    onClick={() => data.onDelete(id)}
-                    className="text-white/70 hover:text-white transition-colors p-1.5 rounded hover:bg-white/20"
+                    onClick={() => data.onDelete?.(id)}
+                    className="text-white/70 hover:text-white transition-colors"
                 >
-                    <Trash2 size={18} />
+                    <X size={14} />
                 </button>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="p-4 space-y-3">
+                {/* Target Column */}
                 <div>
-                    <label className="block text-base font-medium text-slate-500 mb-2 uppercase tracking-wide">Target Column</label>
-                    <div className="relative">
-                        <select
-                            className="w-full appearance-none bg-slate-50 border border-gray-200 text-slate-700 text-lg rounded-lg focus:ring-[#EA4335] focus:border-[#EA4335] block p-3 outline-none transition-colors"
-                            onChange={handleTargetChange}
-                            defaultValue={data.targetColumn || ''}
-                        >
-                            <option value="" disabled>Select Target</option>
-                            {data.columns?.map((col: string) => (
-                                <option key={col} value={col}>{col}</option>
-                            ))}
-                        </select>
-                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
-                            <svg className="fill-current h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
-                        </div>
-                    </div>
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">
+                        Target Column
+                    </label>
+                    <select
+                        value={targetColumn}
+                        onChange={(e) => onChange('targetColumn', e.target.value)}
+                        onPointerDownCapture={(e) => e.stopPropagation()}
+                        className="nodrag nopan w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all"
+                    >
+                        <option value="" disabled>Select Target</option>
+                        {data.columns?.map((col: string) => (
+                            <option key={col} value={col}>{col}</option>
+                        ))}
+                    </select>
                 </div>
 
+                {/* Algorithm */}
                 <div>
-                    <label className="block text-base font-medium text-slate-500 mb-2 uppercase tracking-wide">Algorithm</label>
-                    <div className="relative">
-                        <select
-                            className="w-full appearance-none bg-slate-50 border border-gray-200 text-slate-700 text-lg rounded-lg focus:ring-[#EA4335] focus:border-[#EA4335] block p-3 outline-none transition-colors"
-                            onChange={handleModelChange}
-                            defaultValue={data.modelType || 'Logistic Regression'}
-                        >
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">
+                        Algorithm
+                    </label>
+                    <select
+                        value={modelType}
+                        onChange={(e) => onChange('modelType', e.target.value)}
+                        onPointerDownCapture={(e) => e.stopPropagation()}
+                        className="nodrag nopan w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all"
+                    >
+                        <optgroup label="Classification">
                             <option value="Logistic Regression">Logistic Regression</option>
                             <option value="Decision Tree">Decision Tree</option>
                             <option value="Random Forest">Random Forest</option>
+                            <option value="SVM">SVM</option>
+                            <option value="KNN">KNN</option>
+                            <option value="Gradient Boosting">Gradient Boosting</option>
+                            <option value="XGBoost">XGBoost</option>
+                            <option value="MLP Classifier">MLP Classifier</option>
+                        </optgroup>
+                        <optgroup label="Regression">
                             <option value="Linear Regression">Linear Regression</option>
                             <option value="Random Forest Regressor">RF Regressor</option>
-                        </select>
-                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
-                            <svg className="fill-current h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
-                        </div>
-                    </div>
+                            <option value="Ridge Regression">Ridge Regression</option>
+                            <option value="Lasso Regression">Lasso Regression</option>
+                            <option value="ElasticNet">ElasticNet</option>
+                            <option value="SVR">SVR</option>
+                            <option value="KNN Regressor">KNN Regressor</option>
+                            <option value="Gradient Boosting Regressor">GB Regressor</option>
+                            <option value="XGBoost Regressor">XGBoost Regressor</option>
+                            <option value="MLP Regressor">MLP Regressor</option>
+                        </optgroup>
+                    </select>
                 </div>
+
+                <div className="text-xs text-slate-400 italic pt-1">
+                    {targetColumn ? `Predicting: ${targetColumn}` : 'Upload data to select target column'}
+                </div>
+
+                {data.stepPreview && <StepPreview stepPreview={data.stepPreview} accentColor="#EA4335" />}
             </div>
 
-            {/* Custom Source Handle (Right) */}
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-50 flex items-center justify-center w-8 h-8">
-                <Handle
-                    type="source"
-                    position={Position.Right}
-                    className="!w-8 !h-8 !opacity-0 !rounded-full !bg-transparent z-10 cursor-crosshair"
-                />
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-3 h-3 bg-[#EA4335] border-2 border-white rounded-full transition-all duration-300 group-hover:scale-0 group-hover:opacity-0 shadow-sm" />
-                    <div className="absolute w-6 h-6 bg-[#EA4335] rounded-full text-white flex items-center justify-center shadow-lg transform scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300">
-                        <Plus size={14} strokeWidth={3} />
-                    </div>
-                </div>
-            </div>
+            <Handle type="target" position={Position.Left} className="!bg-red-500 !w-3 !h-3 !border-2 !border-white" />
+            <Handle type="source" position={Position.Right} className="!bg-red-500 !w-3 !h-3 !border-2 !border-white" />
         </div>
     );
 }
+
+export default memo(ModelNode);

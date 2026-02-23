@@ -5,14 +5,16 @@ Updated for MongoDB + Cloudinary
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 import uvicorn
 import os
 import logging
 import requests
+import numpy as np
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -66,7 +68,7 @@ app.add_middleware(
 )
 
 # Global service instances
-ml_service = MLService()
+# ml_service = MLService() # REMOVED: Global instance causes race conditions
 chat_service = ChatService()
 
 
@@ -78,6 +80,23 @@ def serialize_doc(doc: dict) -> dict:
         return None
     doc["id"] = str(doc.pop("_id", ""))
     return doc
+
+
+def convert_numpy_types(obj):
+    """Recursively convert numpy types to native Python types for JSON serialization."""
+    if isinstance(obj, dict):
+        return {k: convert_numpy_types(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [convert_numpy_types(item) for item in obj]
+    elif isinstance(obj, (np.integer,)):
+        return int(obj)
+    elif isinstance(obj, (np.floating,)):
+        return float(obj)
+    elif isinstance(obj, (np.bool_,)):
+        return bool(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    return obj
 
 
 # ==================== Auth Endpoints ====================
@@ -99,7 +118,7 @@ def register(user: UserCreate):
         "email": user.email,
         "username": user.username,
         "hashed_password": hashed_password,
-        "created_at": datetime.utcnow()
+        "created_at": datetime.now(timezone.utc)
     }
     result = users_collection.insert_one(new_user)
     new_user["id"] = str(result.inserted_id)
@@ -154,6 +173,7 @@ async def upload_file(
         content = await file.read()
         
         # 1. Process with ML service to get preview (in memory)
+        ml_service = MLService() # [FIX] New instance per request
         data = ml_service.load_data(content, file.filename)
         
         # 2. Upload to Cloudinary
@@ -173,7 +193,7 @@ async def upload_file(
             "cloudinary_public_id": upload_result["public_id"],
             "columns": data.get("columns", []),
             "shape": {"rows": data.get("shape", [0, 0])[0], "cols": data.get("shape", [0, 0])[1]},
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc)
         }
         result = datasets_collection.insert_one(dataset)
         
@@ -188,15 +208,24 @@ async def upload_file(
 
 @app.get("/datasets")
 def get_datasets(current_user: dict = Depends(get_current_user)):
-    """Get all datasets for the current user."""
-    datasets = datasets_collection.find({"user_id": current_user["id"]})
+    """Get all datasets for the current user including samples."""
+    # Sort by filename (case-insensitive) for a unified list
+    datasets = datasets_collection.find({
+        "$or": [
+            {"user_id": current_user["id"]},
+            {"is_sample": True},
+            {"user_id": "system"}
+        ]
+    }).sort("filename", 1)  # 1 = Ascending
+    
     return [
         {
             "id": str(d["_id"]),
             "filename": d["filename"],
             "columns": d.get("columns", []),
             "shape": d.get("shape", {}),
-            "created_at": d["created_at"].isoformat() if d.get("created_at") else None
+            "created_at": d["created_at"].isoformat() if d.get("created_at") else None,
+            "is_sample": d.get("is_sample", False) or d.get("user_id") == "system"
         }
         for d in datasets
     ]
@@ -214,7 +243,8 @@ def delete_dataset(
             "_id": ObjectId(dataset_id),
             "user_id": current_user["id"]
         })
-    except:
+    except Exception as e:
+        logger.error(f"Error finding dataset: {e}")
         raise HTTPException(status_code=404, detail="Dataset not found")
     
     if not dataset:
@@ -243,15 +273,30 @@ async def analyze_dataset(
         # Fetch Dataset from MongoDB
         dataset = None
         try:
-            dataset = datasets_collection.find_one({"_id": ObjectId(request.file_id)})
-        except:
+            dataset = datasets_collection.find_one({
+                "_id": ObjectId(request.file_id),
+                "$or": [
+                    {"user_id": current_user["id"]},
+                    {"is_sample": True},
+                    {"user_id": "system"}
+                ]
+            })
+        except Exception:
             pass
         
         if not dataset:
-            dataset = datasets_collection.find_one({"filename": request.file_id})
-
+            # Fallback: Try by filename + user_id or system
+            dataset = datasets_collection.find_one({
+                "filename": request.file_id,
+                "$or": [
+                    {"user_id": current_user["id"]},
+                    {"is_sample": True},
+                    {"user_id": "system"}
+                ]
+            })
+            
         if not dataset:
-            raise HTTPException(status_code=404, detail="Dataset not found")
+            raise HTTPException(status_code=404, detail="Dataset not found or unauthorized")
 
         # Download from Cloudinary
         try:
@@ -261,6 +306,7 @@ async def analyze_dataset(
             raise HTTPException(status_code=404, detail="File not found in storage")
 
         # Analyze
+        ml_service = MLService() # [FIX] New instance per request
         analysis = ml_service.analyze_dataset(file_content, dataset["filename"])
         return analysis
 
@@ -299,7 +345,7 @@ def create_workflow(
         "name": workflow.name,
         "nodes_json": workflow.nodes_json,
         "edges_json": workflow.edges_json,
-        "created_at": datetime.utcnow()
+        "created_at": datetime.now(timezone.utc)
     }
     result = workflows_collection.insert_one(new_workflow)
     
@@ -322,7 +368,8 @@ def delete_workflow(
             "_id": ObjectId(workflow_id),
             "user_id": current_user["id"]
         })
-    except:
+    except Exception as e:
+        logger.error(f"Error deleting workflow: {e}")
         raise HTTPException(status_code=404, detail="Workflow not found")
     
     if result.deleted_count == 0:
@@ -340,8 +387,9 @@ async def run_pipeline(
 ):
     """Run ML pipeline."""
     try:
+        ml_service = MLService() # [FIX] New instance per request
         results = ml_service.run_pipeline(request, current_user["id"])
-        return results
+        return convert_numpy_types(results)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -359,9 +407,10 @@ async def run_pipeline_batch(
     
     for result_node_id, request in requests.items():
         try:
+            # Ownership check handled inside ml_service.run_pipeline now
             service = MLService()
             results = service.run_pipeline(request, current_user["id"])
-            batch_results[result_node_id] = results
+            batch_results[result_node_id] = convert_numpy_types(results)
         except Exception as e:
             logger.error(f"Error processing node {result_node_id}: {e}")
             batch_results[result_node_id] = {"error": str(e)}
@@ -399,6 +448,18 @@ async def chat_endpoint(
         return response_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/chat/stream")
+async def chat_stream_endpoint(
+    request: ChatRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Stream chat response as NDJSON."""
+    return StreamingResponse(
+        chat_service.get_response_stream(request.workflow, request.question, request.sample_data),
+        media_type="application/x-ndjson"
+    )
 
 
 if __name__ == "__main__":
