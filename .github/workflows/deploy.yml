@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'backend/**'
+      - '.github/workflows/**'
 
 jobs:
   # ============ JOB 1: Validate code before deploying ============
