@@ -45,7 +45,7 @@ jobs:
           CLOUDINARY_CLOUD_NAME: "dummy"
           CLOUDINARY_API_KEY: "dummy"
           CLOUDINARY_API_SECRET: "dummy"
-          OPENAI_API_KEY: "dummy"
+          NVIDIA_API_KEY: "dummy"
         run: |
           cd backend
           python -c "
@@ -76,6 +76,12 @@ jobs:
             cd backend
             source venv/bin/activate
             pip install -r requirements.txt --quiet
+            # Update NVIDIA_API_KEY in .env from GitHub Secret
+            if grep -q "NVIDIA_API_KEY" .env; then
+              sed -i "s|^NVIDIA_API_KEY=.*|NVIDIA_API_KEY=${{ secrets.NVIDIA_API_KEY }}|" .env
+            else
+              echo "NVIDIA_API_KEY=${{ secrets.NVIDIA_API_KEY }}" >> .env
+            fi
             sudo systemctl restart flowml
             echo "✅ Deployment complete!"
 

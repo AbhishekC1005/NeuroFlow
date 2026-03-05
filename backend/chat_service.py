@@ -8,12 +8,15 @@ load_dotenv()
 
 class ChatService:
     def __init__(self):
-        api_key = os.getenv("OPENAI_API_KEY")
+        api_key = os.getenv("NVIDIA_API_KEY")
         if not api_key:
-            print("WARNING: OPENAI_API_KEY not found in environment variables.")
+            print("WARNING: NVIDIA_API_KEY not found in environment variables.")
             self.client = None
         else:
-            self.client = OpenAI(api_key=api_key)
+            self.client = OpenAI(
+                base_url="https://integrate.api.nvidia.com/v1",
+                api_key=api_key
+            )
 
     def _get_system_prompt(self):
         return """You are Flow, a concise and expert ML assistant for FlowML, a drag-and-drop ML pipeline builder.
@@ -85,7 +88,7 @@ Instructions:
         try:
             if not self.client:
                 return {
-                    "response": "OpenAI API key is not configured. Please set OPENAI_API_KEY in your environment.",
+                    "response": "NVIDIA API key is not configured. Please set NVIDIA_API_KEY in your environment.",
                     "command": None
                 }
             
@@ -100,18 +103,23 @@ User Input:
 {question}"""
 
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="moonshotai/kimi-k2.5",
                 messages=[
                     {"role": "system", "content": self._get_system_prompt()},
                     {"role": "user", "content": user_message}
                 ],
-                response_format={ "type": "json_object" },
                 max_tokens=2000,
                 temperature=0.7
             )
             
             response_content = response.choices[0].message.content
-            return json.loads(response_content)
+            try:
+                return json.loads(response_content)
+            except json.JSONDecodeError:
+                return {
+                    "response": response_content,
+                    "command": None
+                }
         except Exception as e:
             print(f"Error in ChatService: {e}")
             return {
@@ -122,7 +130,7 @@ User Input:
     def get_response_stream(self, workflow: dict, question: str, sample_data: list = None):
         """Streaming response — yields chunks of text, then a final JSON with command data."""
         if not self.client:
-            yield json.dumps({"type": "error", "content": "OpenAI API key is not configured."}) + "\n"
+            yield json.dumps({"type": "error", "content": "NVIDIA API key is not configured."}) + "\n"
             return
 
         workflow_str = json.dumps(workflow, indent=2)
@@ -137,12 +145,11 @@ User Input:
 
         try:
             stream = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="moonshotai/kimi-k2.5",
                 messages=[
                     {"role": "system", "content": self._get_system_prompt()},
                     {"role": "user", "content": user_message}
                 ],
-                response_format={"type": "json_object"},
                 max_tokens=2000,
                 temperature=0.7,
                 stream=True
