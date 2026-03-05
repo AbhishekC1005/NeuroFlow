@@ -48,13 +48,22 @@ export default function ChatPanel({ onClose, nodes, edges, onPipelineCreate, onP
 
     const adjustHeight = () => {
         if (inputRef.current) {
-            inputRef.current.style.height = 'auto';
-            inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 200)}px`;
+            inputRef.current.style.height = '0px';
+            const scrollH = inputRef.current.scrollHeight;
+            // Start at single-line (~40px), grow up to ~160px (approx 6 rows)
+            inputRef.current.style.height = `${Math.max(40, Math.min(scrollH, 160))}px`;
         }
     };
 
     useEffect(() => {
         adjustHeight();
+    }, [input]);
+
+    // Reset height when input is cleared (after sending)
+    useEffect(() => {
+        if (input === '' && inputRef.current) {
+            inputRef.current.style.height = '40px';
+        }
     }, [input]);
 
     const scrollToBottom = () => {
@@ -290,7 +299,7 @@ export default function ChatPanel({ onClose, nodes, edges, onPipelineCreate, onP
             </div>
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto sidebar-scrollbar">
+            <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                 {isEmpty ? (
                     <div className="flex flex-col items-center justify-center h-full px-6 py-8">
                         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#4285F4] to-[#1a73e8] flex items-center justify-center mb-5 shadow-xl shadow-blue-200/40">
@@ -420,8 +429,8 @@ export default function ChatPanel({ onClose, nodes, edges, onPipelineCreate, onP
             </div>
 
             {/* Input Area */}
-            <div className="p-4 shrink-0 bg-white border-t border-gray-100">
-                <div className="relative bg-[#F1F3F4] rounded-2xl border border-gray-200 focus-within:border-[#4285F4] focus-within:ring-2 focus-within:ring-[#4285F4]/15 focus-within:bg-white transition-all duration-200">
+            <div className="px-3 pb-3 pt-2 shrink-0 bg-gradient-to-t from-white via-white to-white/80">
+                <div className="relative bg-[#F8F9FA] rounded-2xl border border-gray-200/80 focus-within:border-[#4285F4]/50 focus-within:ring-[3px] focus-within:ring-[#4285F4]/10 focus-within:bg-white transition-all duration-300 shadow-sm focus-within:shadow-md">
                     <textarea
                         ref={inputRef}
                         value={input}
@@ -430,20 +439,30 @@ export default function ChatPanel({ onClose, nodes, edges, onPipelineCreate, onP
                         placeholder={isProcessing ? "Flow is thinking..." : "Ask Flow anything..."}
                         disabled={isProcessing}
                         rows={1}
-                        className="w-full bg-transparent py-3 pl-4 pr-11 text-sm text-[#202124] placeholder:text-[#80868B] focus:outline-none disabled:opacity-50 disabled:cursor-wait resize-none overflow-y-auto max-h-[200px]"
-                        style={{ minHeight: '44px' }}
+                        className="w-full bg-transparent py-3 pl-4 pr-12 text-sm text-[#202124] placeholder:text-[#80868B] focus:outline-none disabled:opacity-50 disabled:cursor-wait resize-none overflow-y-auto"
+                        style={{ height: '40px', maxHeight: '160px' }}
                     />
                     <button
                         onClick={() => handleSend()}
                         disabled={isProcessing || !input.trim()}
-                        className="absolute right-2 bottom-2 w-7 h-7 flex items-center justify-center bg-[#4285F4] hover:bg-[#1a73e8] text-white rounded-lg transition-all shadow-sm disabled:opacity-30 disabled:cursor-not-allowed disabled:shadow-none"
+                        className={`absolute right-2 bottom-2 w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-200 ${input.trim() && !isProcessing
+                            ? 'bg-[#4285F4] hover:bg-[#1a73e8] text-white shadow-md shadow-blue-200/40 hover:shadow-lg hover:scale-105'
+                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                            }`}
                     >
-                        <ArrowUp size={14} strokeWidth={2.5} />
+                        <ArrowUp size={15} strokeWidth={2.5} />
                     </button>
                 </div>
-                <p className="text-[10px] text-[#80868B] text-center mt-2">
-                    Flow can make mistakes · Verify important info
-                </p>
+                <div className="flex items-center justify-between mt-1.5 px-1">
+                    <p className="text-[10px] text-[#80868B]">
+                        Flow can make mistakes · Verify important info
+                    </p>
+                    {input.length > 0 && (
+                        <p className={`text-[10px] font-mono transition-colors ${input.length > 500 ? 'text-amber-500' : 'text-[#80868B]'}`}>
+                            {input.length}
+                        </p>
+                    )}
+                </div>
             </div>
         </aside>
     );

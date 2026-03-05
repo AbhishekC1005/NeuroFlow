@@ -1,10 +1,48 @@
 
 import os
 import json
+import re
 from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Keywords that signal the user wants to build/modify a pipeline
+PIPELINE_KEYWORDS = re.compile(
+    r'\b(create|build|make|generate|add|remove|delete|update|modify|change|replace|set up|setup|construct|design)\b',
+    re.IGNORECASE
+)
+
+# Lean base prompt — used for ALL requests
+BASE_SYSTEM_PROMPT = """You are Flow, a concise ML assistant for FlowML (a drag-and-drop ML pipeline builder).
+
+Rules:
+- Be SHORT: 2-3 sentences max for simple questions. Use bullet points.
+- Only give detailed responses when explicitly asked.
+- Output valid JSON: {"response": "your text", "command": null}
+"""
+
+# Extended prompt — ONLY appended when user wants to build/modify pipeline
+PIPELINE_PROMPT_EXTENSION = """
+PIPELINE MODE ACTIVE — the user wants to create or modify a pipeline.
+
+Output format when building:
+{"response": "text", "command": {"type": "create_pipeline", "data": {"nodes": [...], "edges": [...]}}}
+
+When removing/modifying nodes, return the COMPLETE pipeline state.
+
+Node Types: 'dataset', 'imputation', 'encoding', 'preprocessing', 'split', 'model', 'result', 'outlier', 'duplicate', 'featureSelection', 'featureEngineering', 'pca', 'classBalancing', 'crossValidation'.
+
+CRITICAL RULE: For model nodes, the "label" and "modelType" MUST EXACTLY match what the user asked for. Never default to a different model.
+- modelType options: 'Logistic Regression', 'Decision Tree', 'Random Forest', 'Linear Regression', 'Random Forest Regressor', 'Ridge Regression', 'ElasticNet', 'SVM', 'KNN', 'Gradient Boosting', 'XGBoost'
+- Pattern: {"type": "model", "data": {"label": "<REQUESTED_MODEL>", "modelType": "<REQUESTED_MODEL>"}}
+- Preprocessing pattern: {"type": "preprocessing", "data": {"label": "Preprocessing", "scaler": "StandardScaler"}}
+- Imputation pattern: {"type": "imputation", "data": {"label": "Imputation", "strategy": "mean"}}
+
+Positioning: Space nodes 300px apart horizontally. Use simple IDs (n1, n2, n3). Example layout:
+Dataset {x:0,y:0} → Imputation {x:300,y:0} → Split {x:600,y:0} → Model {x:900,y:0} → Result {x:1200,y:0}
+"""
+
 
 class ChatService:
     def __init__(self):
@@ -18,100 +56,39 @@ class ChatService:
                 api_key=api_key
             )
 
-    def _get_system_prompt(self):
-        return """You are Flow, a concise and expert ML assistant for FlowML, a drag-and-drop ML pipeline builder.
-
-RESPONSE LENGTH RULES (CRITICAL):
-- Keep answers SHORT by default — 2-3 sentences max for simple questions.
-- Use bullet points instead of long paragraphs.
-- Only give detailed/long responses when the user explicitly asks for explanation, detail, or elaboration.
-- Never repeat what the user already knows. Be direct and to-the-point.
-
-PIPELINE COMMAND RULES (CRITICAL):
-- Generate a pipeline command when the user asks to "create", "build", "make", "generate", "add", "remove", "delete", "update", or "modify" the pipeline.
-- For general questions like "what model should I use?", "explain my pipeline", "suggest improvements" — just answer with text. Do NOT generate a command unless the user explicitly asks to apply changes.
-- If unsure whether the user wants a pipeline, just answer the question.
-- When removing or modifying nodes, YOU MUST RETURN THE COMPLETE PIPELINE STATE (all nodes and edges) as you want it to appear.
-
-Your Capabilities:
-1. Explain Concepts: Answer questions about ML, nodes, and errors.
-2. Build/Modify Pipelines: ONLY when explicitly asked with action words.
-
-Output Format:
-You must output a JSON object with this structure:
-{
-    "response": "Your text response to the user here.",
-    "command": {
-        "type": "create_pipeline",
-        "data": {
-            "nodes": [ ... list of reactflow nodes ... ],
-            "edges": [ ... list of reactflow edges ... ]
-        }
-    } 
-}
-OR if no command is needed (just chatting/explaining):
-{
-    "response": "Your answer here.",
-    "command": null
-}
-
-Node Types Available: 'dataset', 'imputation', 'encoding', 'preprocessing', 'split', 'model', 'result', 'outlier', 'duplicate', 'featureSelection', 'featureEngineering', 'pca', 'classBalancing', 'crossValidation'.
-
-CRITICAL: Node Configuration (`data` field)
-You MUST pre-configure the nodes based on the user's request.
-- **Model Node**: Set `data.modelType`.
-  - Options: 'Logistic Regression', 'Decision Tree', 'Random Forest', 'Linear Regression', 'Random Forest Regressor'.
-  - Example: `{ "id": "model1", "type": "model", "data": { "label": "Random Forest", "modelType": "Random Forest" } }`
-- **Preprocessing Node**: Set robust defaults.
-  - Example: `{ "type": "preprocessing", "data": { "label": "Preprocessing", "scaler": "StandardScaler" } }`
-- **Imputation Node**: Set default strategy.
-  - Example: `{ "type": "imputation", "data": { "label": "Imputation", "strategy": "mean" } }`
-
-Instructions:
-- **Append Logic**: The frontend will handle unique IDs. You can use simple IDs like "n1", "n2", "n3".
-- **Positioning RULES**:
-  - You MUST generate explicit `x` and `y` coordinates for every node.
-  - **Do NOT** output nodes with the same (x, y) coordinates.
-  - **Horizontal Layout**: Space nodes out by at least **300 pixels** horizontally (x: 0, x: 300, x: 600, etc.).
-  - **Vertical Layout**: If branching, space out vertically by at least **150 pixels**.
-  - **Example**:
-    - Dataset: { x: 0, y: 0 }
-    - Imputation: { x: 300, y: 0 }
-    - Split: { x: 600, y: 0 }
-    - Model: { x: 900, y: 0 }
-    - Result: { x: 1200, y: 0 }
-  - **Modifications**: When modifying, keep the existing layout if possible, but ensure any NEW nodes do not overlap with existing ones.
-"""
+    def _get_system_prompt(self, question: str) -> str:
+        """Returns a lean prompt for chat, or extended prompt for pipeline building."""
+        prompt = BASE_SYSTEM_PROMPT
+        if PIPELINE_KEYWORDS.search(question):
+            prompt += PIPELINE_PROMPT_EXTENSION
+        return prompt
 
     def get_response(self, workflow: dict, question: str, sample_data: list = None) -> dict:
-        """Non-streaming response (kept for backward compatibility)."""
+        """Non-streaming response."""
         try:
             if not self.client:
                 return {
                     "response": "NVIDIA API key is not configured. Please set NVIDIA_API_KEY in your environment.",
                     "command": None
                 }
-            
-            workflow_str = json.dumps(workflow, indent=2)
-            sample_data_str = json.dumps(sample_data, indent=2) if sample_data else "No sample data available."
-            
-            user_message = f"""Current Pipeline Context:
-Workflow: {workflow_str}
-Sample Data: {sample_data_str}
 
-User Input:
-{question}"""
+            workflow_str = json.dumps(workflow, indent=2)
+            sample_data_str = json.dumps(sample_data, indent=2) if sample_data else "No sample data."
+
+            user_message = f"""Pipeline: {workflow_str}
+Data: {sample_data_str}
+Question: {question}"""
 
             response = self.client.chat.completions.create(
-                model="moonshotai/kimi-k2.5",
+                model="moonshotai/kimi-k2-instruct",
                 messages=[
-                    {"role": "system", "content": self._get_system_prompt()},
+                    {"role": "system", "content": self._get_system_prompt(question)},
                     {"role": "user", "content": user_message}
                 ],
-                max_tokens=2000,
-                temperature=0.7
+                max_tokens=1024,
+                temperature=0.6
             )
-            
+
             response_content = response.choices[0].message.content
             try:
                 return json.loads(response_content)
@@ -123,7 +100,7 @@ User Input:
         except Exception as e:
             print(f"Error in ChatService: {e}")
             return {
-                "response": f"I encountered an error processing your request: {str(e)}. Please check if your API key is valid.",
+                "response": f"Error: {str(e)}",
                 "command": None
             }
 
@@ -134,31 +111,30 @@ User Input:
             return
 
         workflow_str = json.dumps(workflow, indent=2)
-        sample_data_str = json.dumps(sample_data, indent=2) if sample_data else "No sample data available."
+        sample_data_str = json.dumps(sample_data, indent=2) if sample_data else "No sample data."
 
-        user_message = f"""Current Pipeline Context:
-Workflow: {workflow_str}
-Sample Data: {sample_data_str}
-
-User Input:
-{question}"""
+        user_message = f"""Pipeline: {workflow_str}
+Data: {sample_data_str}
+Question: {question}"""
 
         try:
             stream = self.client.chat.completions.create(
-                model="moonshotai/kimi-k2.5",
+                model="moonshotai/kimi-k2-instruct",
                 messages=[
-                    {"role": "system", "content": self._get_system_prompt()},
+                    {"role": "system", "content": self._get_system_prompt(question)},
                     {"role": "user", "content": user_message}
                 ],
-                max_tokens=2000,
-                temperature=0.7,
+                max_tokens=1024,
+                temperature=0.6,
                 stream=True
             )
 
             full_content = ""
             for chunk in stream:
+                if not chunk.choices:
+                    continue
                 delta = chunk.choices[0].delta
-                if delta.content:
+                if delta and delta.content:
                     full_content += delta.content
                     yield json.dumps({"type": "chunk", "content": delta.content}) + "\n"
 
