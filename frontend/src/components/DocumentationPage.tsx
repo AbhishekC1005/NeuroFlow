@@ -10,7 +10,7 @@ interface DocumentationPageProps {
     onClose?: () => void;
 }
 
-export default function DocumentationPage({ isModal, onClose }: DocumentationPageProps) {
+export default function DocumentationPage({ isModal, onClose: _onClose }: DocumentationPageProps) {
     const [activeSection, setActiveSection] = useState<Section>('ml-basics');
     const location = useLocation();
     const fromWorkspace = location.state?.from === 'workspace';

@@ -5,7 +5,7 @@ import 'reactflow/dist/style.css';
 import {
     ArrowLeft, ArrowRight, LayoutTemplate, Database, LineChart,
     BrainCircuit, AlertTriangle, Scale, Filter, Repeat,
-    Minimize2, Wrench, Copy, Search
+    Minimize2, Wrench, Search
 } from 'lucide-react';
 import logo from '../assets/image.png';
 import axios from 'axios';
@@ -416,14 +416,14 @@ interface TemplatesPageProps {
     onClose?: () => void;
 }
 
-export default function TemplatesPage({ isModal, onSelectTemplate, onClose }: TemplatesPageProps) {
+export default function TemplatesPage({ isModal, onSelectTemplate, onClose: _onClose }: TemplatesPageProps) {
     const navigate = useNavigate();
     const location = useLocation();
     const { token } = useAuth();
     const fromWorkspace = location.state?.from === 'workspace';
     const [activeCategory, setActiveCategory] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
-    const [loadingTemplate, setLoadingTemplate] = useState<string | null>(null);
+    const [_loadingTemplate, setLoadingTemplate] = useState<string | null>(null);
 
     const handleTryTemplate = async (template: any) => {
         const { icon, ...sanitizedTemplate } = template;

@@ -92,7 +92,7 @@ export default function ResultDashboard({ data, className = '', viewMode = 'comp
 
                             {/* Secondary Metrics */}
                             {!data.is_regression ? (
-                                ['Precision', 'Recall', 'F1 Score'].map((metric, i) => {
+                                ['Precision', 'Recall', 'F1 Score'].map((metric, _i) => {
                                     let val = 0;
                                     if (data.report && data.report['weighted avg']) {
                                         if (metric === 'Precision') val = data.report['weighted avg']['precision'];
@@ -257,8 +257,8 @@ export default function ResultDashboard({ data, className = '', viewMode = 'comp
                             <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
                                 <div className="flex items-center gap-3 mb-4">
                                     <div className={`p-2 rounded-lg ${data.overfitting_analysis.status === 'good' ? 'bg-green-50 text-green-600' :
-                                            data.overfitting_analysis.status === 'moderate' ? 'bg-yellow-50 text-yellow-600' :
-                                                'bg-red-50 text-red-600'
+                                        data.overfitting_analysis.status === 'moderate' ? 'bg-yellow-50 text-yellow-600' :
+                                            'bg-red-50 text-red-600'
                                         }`}>
                                         <AlertTriangle size={20} />
                                     </div>
@@ -282,13 +282,13 @@ export default function ResultDashboard({ data, className = '', viewMode = 'comp
                                         </div>
                                     </div>
                                     <div className={`p-4 rounded-xl ${data.overfitting_analysis.status === 'good' ? 'bg-green-50' :
-                                            data.overfitting_analysis.status === 'moderate' ? 'bg-yellow-50' :
-                                                'bg-red-50'
+                                        data.overfitting_analysis.status === 'moderate' ? 'bg-yellow-50' :
+                                            'bg-red-50'
                                         }`}>
                                         <div className="text-xs font-bold text-slate-400 uppercase mb-1">Gap</div>
                                         <div className={`text-2xl font-bold ${data.overfitting_analysis.status === 'good' ? 'text-green-600' :
-                                                data.overfitting_analysis.status === 'moderate' ? 'text-yellow-600' :
-                                                    'text-red-600'
+                                            data.overfitting_analysis.status === 'moderate' ? 'text-yellow-600' :
+                                                'text-red-600'
                                             }`}>
                                             {data.is_regression
                                                 ? data.overfitting_analysis.gap?.toFixed(3)

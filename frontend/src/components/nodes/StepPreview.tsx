@@ -151,7 +151,7 @@ function StepPreview({ stepPreview, accentColor = '#4285F4' }: StepPreviewProps)
                         <div className="px-6 py-3 shrink-0">
                             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Column Names</p>
                             <div className="flex flex-wrap gap-1.5">
-                                {columns.map((col, i) => (
+                                {columns.map((col, _i) => (
                                     <span
                                         key={col}
                                         className="text-xs px-2.5 py-1 rounded-lg font-mono font-medium border transition-colors"
