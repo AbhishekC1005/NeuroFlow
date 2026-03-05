@@ -38,6 +38,13 @@ jobs:
           echo "✅ All Python files have valid syntax"
 
       - name: Check imports work
+        env:
+          MONGODB_URI: "mongodb://dummy:27017/test"
+          JWT_SECRET_KEY: "ci-test-secret"
+          CLOUDINARY_CLOUD_NAME: "dummy"
+          CLOUDINARY_API_KEY: "dummy"
+          CLOUDINARY_API_SECRET: "dummy"
+          OPENAI_API_KEY: "dummy"
         run: |
           cd backend
           python -c "
