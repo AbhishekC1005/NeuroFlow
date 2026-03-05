@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
 import { AlertTriangle, X } from 'lucide-react';
-import StepPreview from './StepPreview';
+
 
 interface OutlierNodeProps {
     id: string;
@@ -70,7 +70,7 @@ function OutlierNode({ id, data }: OutlierNodeProps) {
                     </div>
                 )}
 
-                {data.stepPreview && <StepPreview stepPreview={data.stepPreview} accentColor="#f59e0b" />}
+
             </div>
 
             <Handle type="target" position={Position.Left} className="!bg-amber-500 !w-3 !h-3 !border-2 !border-white" />

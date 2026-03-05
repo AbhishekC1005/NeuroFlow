@@ -20,7 +20,8 @@ import {
     GripVertical,
     ChevronDown,
     ChevronRight,
-    Sparkles
+    Sparkles,
+    Table2,
 } from 'lucide-react';
 
 interface NodeItem {
@@ -56,6 +57,40 @@ const categories: NodeCategory[] = [
                 icon: <Database size={16} />,
                 color: '#4285F4',
                 gradient: 'from-blue-500 to-indigo-500',
+            },
+        ]
+    },
+    {
+        id: 'utilities',
+        title: 'Utilities',
+        subtitle: 'Debug & inspect',
+        emoji: '⑥',
+        nodes: [
+            {
+                type: 'viewDataset',
+                label: 'View Dataset',
+                desc: 'Probe data at any point',
+                tooltip: 'Insert anywhere in your pipeline as a pass-through probe. Click Preview to see the exact state of your data at that point — before or after any cleaning step.',
+                icon: <Table2 size={16} />,
+                color: '#0d9488',
+                gradient: 'from-teal-500 to-cyan-500',
+            },
+        ]
+    },
+    {
+        id: 'evaluation',
+        title: 'Evaluation',
+        subtitle: 'See results',
+        emoji: '⑤',
+        nodes: [
+            {
+                type: 'result',
+                label: 'Results',
+                desc: 'Accuracy, F1, confusion matrix',
+                tooltip: 'View model performance: Accuracy, F1-Score, Confusion Matrix, feature importance, and overfitting detection.',
+                icon: <BarChart3 size={16} />,
+                color: '#34A853',
+                gradient: 'from-emerald-500 to-teal-500',
             },
         ]
     },
@@ -191,23 +226,6 @@ const categories: NodeCategory[] = [
             },
         ]
     },
-    {
-        id: 'evaluation',
-        title: 'Evaluation',
-        subtitle: 'See results',
-        emoji: '⑤',
-        nodes: [
-            {
-                type: 'result',
-                label: 'Results',
-                desc: 'Accuracy, F1, confusion matrix',
-                tooltip: 'View model performance: Accuracy, F1-Score, Confusion Matrix, feature importance, and overfitting detection.',
-                icon: <BarChart3 size={16} />,
-                color: '#34A853',
-                gradient: 'from-emerald-500 to-teal-500',
-            },
-        ]
-    }
 ];
 
 export default function Sidebar({ onClose, onAddNode }: { onClose: () => void; onAddNode?: (type: string) => void }) {

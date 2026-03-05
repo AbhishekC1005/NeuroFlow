@@ -3,7 +3,7 @@ Pydantic models for MongoDB documents.
 These replace SQLAlchemy ORM models.
 """
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_validator
 from bson import ObjectId
@@ -113,6 +113,38 @@ class WorkflowResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# ==================== Workspace Models ====================
+
+class WorkspaceCreate(BaseModel):
+    name: str = "Untitled Workspace"
+
+
+class WorkspaceUpdate(BaseModel):
+    name: Optional[str] = None
+    nodes_json: Optional[List[Dict[str, Any]]] = None
+    edges_json: Optional[List[Dict[str, Any]]] = None
+
+
+class WorkspaceResponse(BaseModel):
+    id: str
+    name: str
+    node_count: int = 0
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WorkspaceDetailResponse(BaseModel):
+    id: str
+    name: str
+    nodes_json: List[Dict[str, Any]] = []
+    edges_json: List[Dict[str, Any]] = []
+    updated_at: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ==================== Pipeline Result Models ====================
 
 class PipelineResultInDB(BaseModel):
@@ -132,6 +164,32 @@ class PipelineResultInDB(BaseModel):
 
 # ==================== Request/Response Models ====================
 
+# Strict allowlist — must match EXACTLY the option values in ModelNode.tsx dropdown
+ALLOWED_MODEL_TYPES = Literal[
+    # Classification
+    'Logistic Regression',
+    'Decision Tree',
+    'Random Forest',
+    'SVM',
+    'KNN',
+    'Gradient Boosting',
+    'XGBoost',
+    'MLP Classifier',
+    # Regression
+    'Linear Regression',
+    'Decision Tree Regressor',
+    'Random Forest Regressor',
+    'Ridge Regression',
+    'Lasso Regression',
+    'ElasticNet',
+    'SVR',
+    'KNN Regressor',
+    'Gradient Boosting Regressor',
+    'XGBoost Regressor',
+    'MLP Regressor',
+]
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -144,7 +202,7 @@ class PipelineRequest(BaseModel):
     imputer_strategy: Optional[str] = 'mean'
     encoder_strategy: Optional[str] = 'onehot'
     test_size: float
-    model_type: str
+    model_type: ALLOWED_MODEL_TYPES  # strictly validated against the dropdown allowlist
     workflow_id: Optional[str] = None
     workflow_snapshot: Optional[Dict[str, Any]] = None
 
@@ -195,3 +253,22 @@ class ChatRequest(BaseModel):
 
 class AnalyzeRequest(BaseModel):
     file_id: str
+
+
+class PreviewUntilRequest(BaseModel):
+    """Request for on-demand dataset preview at a ViewDataset node position."""
+    file_id: str
+    # Ordered list of step types that come BEFORE the ViewDataset node
+    active_steps: Optional[List[str]] = []
+    # Step params (default to 'none'/disabled when step not in active_steps)
+    duplicate_handling: Optional[str] = 'none'
+    outlier_method: Optional[str] = 'none'
+    outlier_action: Optional[str] = 'clip'
+    imputer_strategy: Optional[str] = 'none'
+    encoder_strategy: Optional[str] = 'none'
+    scaler_type: Optional[str] = 'None'
+    feature_selection_method: Optional[str] = 'none'
+    variance_threshold: Optional[float] = 0.01
+    correlation_threshold: Optional[float] = 0.95
+    # Max rows to return in the data grid (col_stats always reflect full df)
+    max_rows: Optional[int] = 500

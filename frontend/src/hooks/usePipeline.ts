@@ -98,15 +98,15 @@ export function usePipeline(
                     random_state: splitNode?.data.randomState ?? 42,
                     shuffle: splitNode?.data.shuffle ?? true,
 
-                    // Duplicate Removal
-                    duplicate_handling: duplicateNode?.data.duplicateHandling || 'first',
+                    // Duplicate Removal — 'none' when node not in pipeline
+                    duplicate_handling: duplicateNode ? (duplicateNode.data.duplicateHandling || 'first') : 'none',
 
-                    // Outlier Handling
-                    outlier_method: outlierNode?.data.outlierMethod || 'iqr',
-                    outlier_action: outlierNode?.data.outlierAction || 'clip',
+                    // Outlier Handling — 'none' when node not in pipeline
+                    outlier_method: outlierNode ? (outlierNode.data.outlierMethod || 'iqr') : 'none',
+                    outlier_action: outlierNode ? (outlierNode.data.outlierAction || 'clip') : 'clip',
 
-                    // Feature Selection
-                    feature_selection_method: featureSelectionNode?.data.featureSelectionMethod || 'variance',
+                    // Feature Selection — 'none' when node not in pipeline
+                    feature_selection_method: featureSelectionNode ? (featureSelectionNode.data.featureSelectionMethod || 'variance') : 'none',
                     variance_threshold: featureSelectionNode?.data.varianceThreshold ?? 0.01,
                     correlation_threshold: featureSelectionNode?.data.correlationThreshold ?? 0.95,
 
@@ -117,12 +117,12 @@ export function usePipeline(
                     // PCA
                     pca_components: pcaNode?.data.pcaComponents ?? 0,
 
-                    // Feature Engineering
-                    feature_engineering_method: featureEngineeringNode?.data.featureEngineeringMethod || 'polynomial',
+                    // Feature Engineering — 'none' when node not in pipeline
+                    feature_engineering_method: featureEngineeringNode ? (featureEngineeringNode.data.featureEngineeringMethod || 'polynomial') : 'none',
                     polynomial_degree: featureEngineeringNode?.data.polynomialDegree ?? 2,
 
-                    // Class Balancing
-                    class_balancing: classBalancingNode?.data.classBalancing || 'oversample',
+                    // Class Balancing — 'none' when node not in pipeline
+                    class_balancing: classBalancingNode ? (classBalancingNode.data.classBalancing || 'oversample') : 'none',
 
                     // Workflow snapshot
                     workflow_snapshot: {

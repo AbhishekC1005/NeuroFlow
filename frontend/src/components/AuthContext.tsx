@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import axios from 'axios';
 
 interface User {
     id: string;
@@ -57,6 +58,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
 
         validateToken();
+    }, []);
+
+    // Bug 6 fix: global Axios 401 interceptor — auto-logout when token expires mid-session
+    useEffect(() => {
+        const interceptor = axios.interceptors.response.use(
+            response => response,
+            error => {
+                if (error.response?.status === 401) {
+                    localStorage.removeItem('token');
+                    setToken(null);
+                    setUser(null);
+                }
+                return Promise.reject(error);
+            }
+        );
+        return () => axios.interceptors.response.eject(interceptor);
     }, []);
 
     const login = async (email: string, password: string) => {

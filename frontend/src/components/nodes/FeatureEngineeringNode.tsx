@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
 import { Wrench, X } from 'lucide-react';
-import StepPreview from './StepPreview';
+
 
 interface FeatureEngineeringNodeProps {
     id: string;
@@ -78,7 +78,7 @@ function FeatureEngineeringNode({ id, data }: FeatureEngineeringNodeProps) {
                     {method === 'none' && 'No transformation applied'}
                 </div>
 
-                {data.stepPreview && <StepPreview stepPreview={data.stepPreview} accentColor="#84cc16" />}
+
             </div>
 
             <Handle type="target" position={Position.Left} className="!bg-lime-500 !w-3 !h-3 !border-2 !border-white" />

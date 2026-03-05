@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
 import { Binary, X } from 'lucide-react';
-import StepPreview from './StepPreview';
+
 
 interface EncodingNodeProps {
     id: string;
@@ -55,7 +55,7 @@ function EncodingNode({ id, data }: EncodingNodeProps) {
                     {strategy === 'frequency' && 'Encodes using category frequency'}
                 </div>
 
-                {data.stepPreview && <StepPreview stepPreview={data.stepPreview} accentColor="#8B5CF6" />}
+
             </div>
 
             <Handle type="target" position={Position.Left} className="!bg-violet-500 !w-3 !h-3 !border-2 !border-white" />

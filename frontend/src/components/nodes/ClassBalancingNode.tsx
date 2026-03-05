@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
 import { Scale, X } from 'lucide-react';
-import StepPreview from './StepPreview';
+
 
 interface ClassBalancingNodeProps {
     id: string;
@@ -57,7 +57,7 @@ function ClassBalancingNode({ id, data }: ClassBalancingNodeProps) {
                     {method === 'none' && 'No balancing applied — may bias toward majority class'}
                 </div>
 
-                {data.stepPreview && <StepPreview stepPreview={data.stepPreview} accentColor="#a855f7" />}
+
             </div>
 
             <Handle type="target" position={Position.Left} className="!bg-fuchsia-500 !w-3 !h-3 !border-2 !border-white" />

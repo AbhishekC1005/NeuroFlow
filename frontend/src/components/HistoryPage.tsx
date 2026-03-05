@@ -3,6 +3,9 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import logo from '../assets/image.png';
 import { useAuth } from "./AuthContext";
 import { ArrowLeft, History, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import axios from 'axios';
+import { API_URL } from '../config';
+import { toast } from 'sonner';
 
 interface HistoryItem {
     id: number;
@@ -20,6 +23,7 @@ export default function HistoryPage() {
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [restoringId, setRestoringId] = useState<number | null>(null);
 
     useEffect(() => {
         if (!isAuthenticated) {
@@ -171,20 +175,55 @@ export default function HistoryPage() {
                                                 <div className="flex items-center gap-3">
                                                     {item.workflow_id ? <span>Workflow #{item.workflow_id}</span> : <span className="text-gray-400">Ad-hoc Run</span>}
 
-                                                    {/* Restore Button for BOTH saved and ad-hoc workflows */}
                                                     {(item.workflow_id || item.workflow_snapshot) && (
                                                         <button
-                                                            onClick={() => {
-                                                                if (item.workflow_id) {
-                                                                    navigate('/workspace', { state: { restoreWorkflowId: item.workflow_id } });
-                                                                } else if (item.workflow_snapshot) {
-                                                                    navigate('/workspace', { state: { template: item.workflow_snapshot } });
+                                                            disabled={restoringId === item.id}
+                                                            onClick={async () => {
+                                                                setRestoringId(item.id);
+                                                                try {
+                                                                    // Create a new workspace from this history entry
+                                                                    const res = await axios.post(
+                                                                        `${API_URL}/workspaces`,
+                                                                        { name: `Restored - ${formatDate(item.created_at)}` },
+                                                                        { headers: { Authorization: `Bearer ${token}` } }
+                                                                    );
+                                                                    const newId = res.data.id;
+
+                                                                    // If it has a workflow snapshot, populate the workspace
+                                                                    if (item.workflow_snapshot) {
+                                                                        await axios.put(
+                                                                            `${API_URL}/workspaces/${newId}`,
+                                                                            { nodes_json: item.workflow_snapshot.nodes || [], edges_json: item.workflow_snapshot.edges || [] },
+                                                                            { headers: { Authorization: `Bearer ${token}` } }
+                                                                        );
+                                                                    } else if (item.workflow_id) {
+                                                                        // Load from saved workflow and copy into new workspace
+                                                                        const wfRes = await axios.get(`${API_URL}/workflows`, {
+                                                                            headers: { Authorization: `Bearer ${token}` }
+                                                                        });
+                                                                        const wf = wfRes.data.find((w: any) => w.id === String(item.workflow_id));
+                                                                        if (wf) {
+                                                                            await axios.put(
+                                                                                `${API_URL}/workspaces/${newId}`,
+                                                                                { nodes_json: wf.nodes_json || [], edges_json: wf.edges_json || [] },
+                                                                                { headers: { Authorization: `Bearer ${token}` } }
+                                                                            );
+                                                                        }
+                                                                    }
+
+                                                                    navigate(`/workspace/${newId}`);
+                                                                } catch {
+                                                                    toast.error('Failed to restore pipeline');
+                                                                } finally {
+                                                                    setRestoringId(null);
                                                                 }
                                                             }}
                                                             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
-                                                            title="Restore this pipeline state"
+                                                            title="Open in a new workspace"
                                                         >
-                                                            Open
+                                                            {restoringId === item.id ? (
+                                                                <div className="w-3 h-3 border-[1.5px] border-blue-500 border-t-transparent rounded-full animate-spin" />
+                                                            ) : 'Open'}
                                                         </button>
                                                     )}
                                                 </div>

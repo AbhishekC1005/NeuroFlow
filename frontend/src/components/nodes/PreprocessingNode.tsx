@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
 import { Settings, X } from 'lucide-react';
-import StepPreview from './StepPreview';
+
 
 interface PreprocessingNodeProps {
   id: string;
@@ -57,7 +57,7 @@ function PreprocessingNode({ id, data }: PreprocessingNodeProps) {
           {scaler === 'Normalizer' && 'Scales each sample to unit norm'}
         </div>
 
-        {data.stepPreview && <StepPreview stepPreview={data.stepPreview} accentColor="#FBBC05" />}
+
       </div>
 
       <Handle type="target" position={Position.Left} className="!bg-yellow-500 !w-3 !h-3 !border-2 !border-white" />

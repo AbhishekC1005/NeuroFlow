@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
 import { Pipette, X } from 'lucide-react';
-import StepPreview from './StepPreview';
+
 
 interface ImputationNodeProps {
     id: string;
@@ -57,7 +57,7 @@ function ImputationNode({ id, data }: ImputationNodeProps) {
                     {strategy === 'drop' && 'Removes rows with any missing values'}
                 </div>
 
-                {data.stepPreview && <StepPreview stepPreview={data.stepPreview} accentColor="#F97316" />}
+
             </div>
 
             <Handle type="target" position={Position.Left} className="!bg-orange-500 !w-3 !h-3 !border-2 !border-white" />

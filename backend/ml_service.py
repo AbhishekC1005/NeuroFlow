@@ -21,7 +21,7 @@ from sklearn.preprocessing import (
 from sklearn.feature_selection import VarianceThreshold
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LogisticRegression, LinearRegression, Ridge, Lasso, ElasticNet
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.ensemble import (
     RandomForestClassifier, RandomForestRegressor,
     GradientBoostingClassifier, GradientBoostingRegressor
@@ -35,7 +35,7 @@ from sklearn.metrics import (
     precision_score, recall_score, f1_score, explained_variance_score
 )
 
-from database import datasets_collection, results_collection
+from database import datasets_collection
 
 warnings.filterwarnings('ignore')
 
@@ -54,6 +54,212 @@ class MLService:
         self.cat_cols = []
         self.target_encoder = None  # For categorical targets
         self.pipeline_warnings = []  # Collect warnings throughout pipeline
+
+    # ==================== ViewDataset: Preview Until ====================
+
+    def _df_snapshot(self, df: 'pd.DataFrame', step: str, rows_before: int = None) -> dict:
+        """Lightweight step-tracking metadata."""
+        return {
+            'step': step,
+            'rows': len(df),
+            'cols': len(df.columns),
+            'delta_rows': (len(df) - rows_before) if rows_before is not None else 0,
+        }
+
+    def preview_until(
+        self,
+        file_content: bytes,
+        filename: str,
+        active_steps: list,
+        duplicate_handling: str = 'none',
+        outlier_method: str = 'none',
+        outlier_action: str = 'clip',
+        imputer_strategy: str = 'none',
+        encoder_strategy: str = 'none',
+        scaler_type: str = 'None',
+        feature_selection_method: str = 'none',
+        variance_threshold: float = 0.01,
+        correlation_threshold: float = 0.95,
+        max_rows: int = 500,
+    ) -> dict:
+        """Load the full raw DataFrame, apply the ordered cleaning/transform steps
+        that come BEFORE the ViewDataset node, and return column stats + data grid."""
+        file_obj = io.BytesIO(file_content)
+        if filename.endswith('.csv'):
+            df = pd.read_csv(file_obj)
+        elif filename.endswith(('.xls', '.xlsx')):
+            df = pd.read_excel(file_obj)
+        else:
+            raise ValueError('Unsupported file format')
+
+        total_rows = len(df)
+        step_log = [self._df_snapshot(df, 'raw')]
+
+        for step in (active_steps or []):
+            rows_before = len(df)
+
+            if step == 'duplicate' and duplicate_handling != 'none':
+                if duplicate_handling == 'all':
+                    df = df.drop_duplicates(keep=False)
+                elif duplicate_handling == 'first':
+                    df = df.drop_duplicates(keep='first')
+                elif duplicate_handling == 'last':
+                    df = df.drop_duplicates(keep='last')
+                df = df.reset_index(drop=True)
+                step_log.append(self._df_snapshot(df, 'duplicate', rows_before))
+
+            elif step == 'outlier' and outlier_method != 'none':
+                numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns.tolist()
+                for col in numeric_cols:
+                    if outlier_method == 'iqr':
+                        Q1, Q3 = df[col].quantile(0.25), df[col].quantile(0.75)
+                        lower, upper = Q1 - 1.5 * (Q3 - Q1), Q3 + 1.5 * (Q3 - Q1)
+                    elif outlier_method == 'zscore':
+                        mean, std = df[col].mean(), df[col].std()
+                        lower, upper = mean - 3 * std, mean + 3 * std
+                    else:
+                        continue
+                    if outlier_action == 'clip':
+                        df[col] = df[col].clip(lower, upper)
+                    elif outlier_action == 'remove':
+                        df = df[(df[col] >= lower) & (df[col] <= upper)]
+                df = df.reset_index(drop=True)
+                step_log.append(self._df_snapshot(df, 'outlier', rows_before))
+
+            elif step == 'imputation' and imputer_strategy != 'none':
+                numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns.tolist()
+                cat_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+                if imputer_strategy == 'drop':
+                    df = df.dropna().reset_index(drop=True)
+                else:
+                    strat = imputer_strategy if imputer_strategy in ('mean', 'median', 'most_frequent') else 'mean'
+                    if numeric_cols:
+                        imp = SimpleImputer(strategy=strat)
+                        df[numeric_cols] = imp.fit_transform(df[numeric_cols])
+                    if cat_cols:
+                        imp_cat = SimpleImputer(strategy='most_frequent')
+                        df[cat_cols] = imp_cat.fit_transform(df[cat_cols])
+                step_log.append(self._df_snapshot(df, 'imputation', rows_before))
+
+            elif step == 'encoding' and encoder_strategy not in ('none', 'None', None):
+                cat_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+                if cat_cols:
+                    if encoder_strategy == 'onehot':
+                        df = pd.get_dummies(df, columns=cat_cols, drop_first=True)
+                        # Convert bool columns to int for clean display
+                        bool_cols = df.select_dtypes(include='bool').columns.tolist()
+                        if bool_cols:
+                            df[bool_cols] = df[bool_cols].astype(int)
+                    elif encoder_strategy in ('label', 'ordinal'):
+                        oe = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+                        df[cat_cols] = oe.fit_transform(df[cat_cols].astype(str))
+                    elif encoder_strategy == 'frequency':
+                        for col in cat_cols:
+                            freq_map = df[col].value_counts(normalize=True)
+                            df[col] = df[col].map(freq_map).fillna(0)
+                    else:
+                        # target encoding requires target — fall back to label
+                        oe = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+                        df[cat_cols] = oe.fit_transform(df[cat_cols].astype(str))
+                step_log.append(self._df_snapshot(df, 'encoding'))
+
+            elif step == 'preprocessing' and scaler_type not in ('None', 'none', None):
+                numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns.tolist()
+                if numeric_cols:
+                    scaler_map = {
+                        'StandardScaler': StandardScaler(),
+                        'MinMaxScaler': MinMaxScaler(),
+                        'RobustScaler': RobustScaler(),
+                        'MaxAbsScaler': MaxAbsScaler(),
+                        'Normalizer': Normalizer(),
+                    }
+                    scaler = scaler_map.get(scaler_type)
+                    if scaler:
+                        df[numeric_cols] = scaler.fit_transform(df[numeric_cols])
+                step_log.append(self._df_snapshot(df, 'preprocessing'))
+
+            elif step == 'featureSelection' and feature_selection_method != 'none':
+                numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+                if feature_selection_method in ('variance', 'both') and numeric_cols:
+                    try:
+                        sel = VarianceThreshold(threshold=variance_threshold)
+                        sel.fit(df[numeric_cols])
+                        low_var = [c for c, s in zip(numeric_cols, sel.get_support()) if not s]
+                        df = df.drop(columns=low_var)
+                    except Exception:
+                        pass
+                if feature_selection_method in ('correlation', 'both'):
+                    numeric_cols2 = df.select_dtypes(include=[np.number]).columns.tolist()
+                    if len(numeric_cols2) > 1:
+                        corr = df[numeric_cols2].corr().abs()
+                        upper = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
+                        high_corr = [c for c in upper.columns if any(upper[c] > correlation_threshold)]
+                        df = df.drop(columns=high_corr)
+                step_log.append(self._df_snapshot(df, 'featureSelection'))
+
+        # ── Build column statistics ──────────────────────────────────────────
+        col_stats = []
+        for col in df.columns:
+            dtype = str(df[col].dtype)
+            null_count = int(df[col].isna().sum())
+            unique_count = int(df[col].nunique(dropna=True))
+            not_null = df[col].dropna()
+
+            if pd.api.types.is_numeric_dtype(df[col]):
+                col_type = 'numeric'
+                col_min = round(float(not_null.min()), 4) if len(not_null) else None
+                col_max = round(float(not_null.max()), 4) if len(not_null) else None
+                col_mean = round(float(not_null.mean()), 4) if len(not_null) else None
+            elif pd.api.types.is_datetime64_any_dtype(df[col]):
+                col_type = 'datetime'
+                col_min = col_max = col_mean = None
+            else:
+                col_type = 'text'
+                col_min = col_max = col_mean = None
+
+            col_stats.append({
+                'name': str(col),
+                'type': col_type,
+                'dtype': dtype,
+                'nulls': null_count,
+                'unique': unique_count,
+                'min': col_min,
+                'max': col_max,
+                'mean': col_mean,
+            })
+
+        # ── Build sample data rows ────────────────────────────────────────────
+        sample_df = df.head(max_rows)
+        data_rows = []
+        for _, row in sample_df.iterrows():
+            row_dict = {}
+            for col in df.columns:
+                val = row[col]
+                try:
+                    is_nan = pd.isna(val)
+                except Exception:
+                    is_nan = False
+                if is_nan:
+                    row_dict[str(col)] = None
+                elif isinstance(val, (np.integer,)):
+                    row_dict[str(col)] = int(val)
+                elif isinstance(val, (np.floating, float)):
+                    row_dict[str(col)] = round(float(val), 4)
+                elif isinstance(val, np.bool_):
+                    row_dict[str(col)] = bool(val)
+                else:
+                    row_dict[str(col)] = str(val)[:200]
+            data_rows.append(row_dict)
+
+        return {
+            'rows': len(df),
+            'cols': len(df.columns),
+            'columns': [str(c) for c in df.columns],
+            'col_stats': col_stats,
+            'data': data_rows,
+            'step_log': step_log,
+            'total_rows_in_dataset': total_rows,
+        }
 
     def load_data(self, file_content: bytes, filename: str):
         """Load data from bytes and return preview info."""
@@ -210,6 +416,11 @@ class MLService:
                 self.X_train = self.X_train[mask]
                 self.y_train = self.y_train[mask]
 
+        # Bug 7 fix: reset index after row-removal to avoid pandas alignment bugs
+        if action == 'remove':
+            self.X_train = self.X_train.reset_index(drop=True)
+            self.y_train = self.y_train.reset_index(drop=True)
+
         if total_outliers > 0:
             self.pipeline_warnings.append(
                 f"Detected {total_outliers} outlier values across {len(self.numeric_cols)} numeric columns "
@@ -300,7 +511,13 @@ class MLService:
             if self.cat_cols:
                 cat_cols_present = [c for c in self.cat_cols if c in self.X_train.columns]
                 if cat_cols_present:
-                    imp_cat = SimpleImputer(strategy='most_frequent')
+                    # Bug 6 fix: respect 'constant' strategy for categorical cols too
+                    cat_strategy = 'most_frequent'
+                    cat_fill = None
+                    if imputer_strategy == 'constant':
+                        cat_strategy = 'constant'
+                        cat_fill = 'missing'
+                    imp_cat = SimpleImputer(strategy=cat_strategy, fill_value=cat_fill)
                     self.X_train[cat_cols_present] = imp_cat.fit_transform(self.X_train[cat_cols_present])
                     self.X_test[cat_cols_present] = imp_cat.transform(self.X_test[cat_cols_present])
 
@@ -354,6 +571,8 @@ class MLService:
                 scaler = MinMaxScaler()
             elif scaler_type == 'RobustScaler':
                 scaler = RobustScaler()
+            elif scaler_type == 'MaxAbsScaler':
+                scaler = MaxAbsScaler()
             elif scaler_type == 'Normalizer':
                 scaler = Normalizer()
             else:
@@ -466,9 +685,9 @@ class MLService:
                 else:
                     dfs.append(cls_data)
             
-            balanced = pd.concat(dfs)
-            self.y_train = balanced['__target__']
-            self.X_train = balanced.drop(columns=['__target__'])
+            balanced = pd.concat(dfs).reset_index(drop=True)
+            self.y_train = balanced['__target__'].reset_index(drop=True)
+            self.X_train = balanced.drop(columns=['__target__']).reset_index(drop=True)
 
         elif method == 'undersample':
             # Random undersampling of majority class
@@ -485,9 +704,9 @@ class MLService:
                 else:
                     dfs.append(cls_data)
             
-            balanced = pd.concat(dfs)
-            self.y_train = balanced['__target__']
-            self.X_train = balanced.drop(columns=['__target__'])
+            balanced = pd.concat(dfs).reset_index(drop=True)
+            self.y_train = balanced['__target__'].reset_index(drop=True)
+            self.X_train = balanced.drop(columns=['__target__']).reset_index(drop=True)
 
         elif method == 'smote':
             try:
@@ -600,16 +819,18 @@ class MLService:
         elif model_type == 'XGBoost':
             try:
                 from xgboost import XGBClassifier
-                self.model = XGBClassifier(
-                    use_label_encoder=False, eval_metric='logloss',
-                    verbosity=0
-                )
+                # Bug 5 fix: use_label_encoder removed in XGBoost 2.x
+                self.model = XGBClassifier(eval_metric='logloss', verbosity=0)
             except ImportError:
                 raise ValueError(
                     "XGBoost is not installed. Install with: pip install xgboost"
                 )
         elif model_type == 'MLP Classifier':
             self.model = MLPClassifier(max_iter=1000, early_stopping=True)
+        # Bug 4 fix: add Decision Tree Regressor
+        elif model_type == 'Decision Tree Regressor':
+            self.model = DecisionTreeRegressor()
+            self.is_regression = True
         elif model_type == 'Linear Regression':
             self.model = LinearRegression()
             self.is_regression = True
@@ -1077,6 +1298,16 @@ class MLService:
             except Exception as e:
                 self.pipeline_warnings.append(f"PCA failed: {str(e)}")
 
+        # Bug 2 fix: detect regression from model_type BEFORE class balancing runs
+        # (self.is_regression is only set inside train_model which runs later)
+        _regression_models = {
+            'Linear Regression', 'Random Forest Regressor', 'Ridge Regression',
+            'Lasso Regression', 'ElasticNet', 'SVR', 'KNN Regressor',
+            'Gradient Boosting Regressor', 'XGBoost Regressor', 'MLP Regressor',
+            'Decision Tree Regressor'
+        }
+        self.is_regression = request.model_type in _regression_models
+
         # 10. Class Balancing (if node present)
         class_balancing = getattr(request, 'class_balancing', 'none')
         balance_result = {}
@@ -1146,16 +1377,5 @@ class MLService:
 
         # Convert numpy types to native Python types before serialization
         results = self._convert_numpy(results)
-
-        # 14. Save results to MongoDB
-        pipeline_result = {
-            "user_id": user_id,
-            "workflow_id": request.workflow_id,
-            "results_json": results,
-            "workflow_snapshot": request.workflow_snapshot,
-            "created_at": datetime.now(timezone.utc)
-        }
-        results_collection.insert_one(pipeline_result)
-        
         return results
 

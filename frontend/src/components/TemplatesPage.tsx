@@ -8,6 +8,10 @@ import {
     Minimize2, Wrench, Copy, Search
 } from 'lucide-react';
 import logo from '../assets/image.png';
+import axios from 'axios';
+import { API_URL } from '../config';
+import { useAuth } from './AuthContext';
+import { toast } from 'sonner';
 
 // Import actual nodes for realistic preview
 import DatasetNode from './nodes/DatasetNode';
@@ -415,16 +419,38 @@ interface TemplatesPageProps {
 export default function TemplatesPage({ isModal, onSelectTemplate, onClose }: TemplatesPageProps) {
     const navigate = useNavigate();
     const location = useLocation();
+    const { token } = useAuth();
     const fromWorkspace = location.state?.from === 'workspace';
     const [activeCategory, setActiveCategory] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
+    const [loadingTemplate, setLoadingTemplate] = useState<string | null>(null);
 
-    const handleTryTemplate = (template: any) => {
+    const handleTryTemplate = async (template: any) => {
         const { icon, ...sanitizedTemplate } = template;
         if (isModal && onSelectTemplate) {
             onSelectTemplate(sanitizedTemplate);
         } else {
-            navigate('/workspace', { state: { template: sanitizedTemplate } });
+            // Create a new workspace and populate with template
+            setLoadingTemplate(template.id);
+            try {
+                const res = await axios.post(
+                    `${API_URL}/workspaces`,
+                    { name: template.name },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+                const newId = res.data.id;
+                // Save template nodes/edges into the new workspace
+                await axios.put(
+                    `${API_URL}/workspaces/${newId}`,
+                    { nodes_json: sanitizedTemplate.nodes || [], edges_json: sanitizedTemplate.edges || [] },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+                navigate(`/workspace/${newId}`);
+            } catch {
+                toast.error('Failed to create workspace from template');
+            } finally {
+                setLoadingTemplate(null);
+            }
         }
     };
 
@@ -501,8 +527,8 @@ export default function TemplatesPage({ isModal, onSelectTemplate, onClose }: Te
                                     key={cat.id}
                                     onClick={() => setActiveCategory(cat.id)}
                                     className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all ${activeCategory === cat.id
-                                            ? 'bg-[#4285F4] text-white shadow-md'
-                                            : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                                        ? 'bg-[#4285F4] text-white shadow-md'
+                                        : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
                                         }`}
                                 >
                                     <Icon size={14} />

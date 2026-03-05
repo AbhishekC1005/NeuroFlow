@@ -1,6 +1,6 @@
 import { memo, useState } from 'react';
 import { Handle, Position } from 'reactflow';
-import { BarChart3, X, Maximize2 } from 'lucide-react';
+import { BarChart3, X, Maximize2, Play } from 'lucide-react';
 import ResultDashboard from '../ResultDashboard';
 import { createPortal } from 'react-dom';
 
@@ -13,13 +13,15 @@ interface ResultNodeProps {
 function ResultNode({ data, id }: ResultNodeProps) {
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    const score = data.is_regression ? (data.r2_score || 0) : (data.accuracy || 0);
-    const percentage = Math.max(0, Math.min(100, score * 100));
+    const hasResults = data.accuracy !== undefined || data.r2_score !== undefined;
+    const colorScore = data.is_regression
+        ? (data.r2_score ?? 0) * 100
+        : (data.accuracy ?? 0) * 100;
 
     const getStatusColor = () => {
-        if (percentage >= 90) return 'text-emerald-500';
-        if (percentage >= 75) return 'text-blue-500';
-        if (percentage >= 60) return 'text-yellow-500';
+        if (colorScore >= 90) return 'text-emerald-500';
+        if (colorScore >= 75) return 'text-blue-500';
+        if (colorScore >= 60) return 'text-yellow-500';
         return 'text-red-500';
     };
 
@@ -45,28 +47,45 @@ function ResultNode({ data, id }: ResultNodeProps) {
                 </div>
 
                 {/* Score Display */}
-                <div className="p-6 flex flex-col items-center justify-center space-y-1">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                        {data.is_regression ? 'R² Score' : 'Accuracy'}
-                    </span>
-                    <div className="flex items-baseline gap-1">
-                        <span className={`text-5xl font-black ${getStatusColor()} tracking-tighter`}>
-                            {percentage.toFixed(1)}
+                {hasResults ? (
+                    <div className="p-6 flex flex-col items-center justify-center space-y-1">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            {data.is_regression ? 'R² Score' : 'Accuracy'}
                         </span>
-                        <span className="text-xl font-bold text-slate-300">%</span>
+                        <div className="flex items-baseline gap-1">
+                            {data.is_regression ? (
+                                <span className={`text-5xl font-black ${getStatusColor()} tracking-tighter`}>
+                                    {(data.r2_score ?? 0).toFixed(3)}
+                                </span>
+                            ) : (
+                                <>
+                                    <span className={`text-5xl font-black ${getStatusColor()} tracking-tighter`}>
+                                        {((data.accuracy ?? 0) * 100).toFixed(1)}
+                                    </span>
+                                    <span className="text-xl font-bold text-slate-300">%</span>
+                                </>
+                            )}
+                        </div>
                     </div>
-                </div>
+                ) : (
+                    <div className="p-6 flex flex-col items-center justify-center space-y-2 text-slate-400">
+                        <Play size={24} className="opacity-30" />
+                        <span className="text-xs font-medium text-center text-slate-400">Run pipeline to see results</span>
+                    </div>
+                )}
 
                 {/* Full Report Button */}
-                <div className="px-4 pb-4">
-                    <button
-                        onClick={(e) => { e.stopPropagation(); setIsModalOpen(true); }}
-                        className="w-full flex items-center justify-center gap-1.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-medium transition-all shadow-lg active:scale-95"
-                    >
-                        <Maximize2 size={12} />
-                        Full Report
-                    </button>
-                </div>
+                {hasResults && (
+                    <div className="px-4 pb-4">
+                        <button
+                            onClick={(e) => { e.stopPropagation(); setIsModalOpen(true); }}
+                            className="w-full flex items-center justify-center gap-1.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-medium transition-all shadow-lg active:scale-95"
+                        >
+                            <Maximize2 size={12} />
+                            Full Report
+                        </button>
+                    </div>
+                )}
 
                 <Handle type="target" position={Position.Left} className="!bg-emerald-500 !w-3 !h-3 !border-2 !border-white" />
             </div>

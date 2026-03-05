@@ -83,7 +83,10 @@ export default function ResultDashboard({ data, className = '', viewMode = 'comp
                                     <span className="font-bold text-xs uppercase tracking-wider">{data.is_regression ? 'R² SCORE' : 'ACCURACY'}</span>
                                 </div>
                                 <div className="text-5xl font-black text-slate-800">
-                                    {data.is_regression ? data.r2_score?.toFixed(3) : (data.accuracy * 100).toFixed(1)}<span className="text-2xl text-slate-400 font-bold ml-1">%</span>
+                                    {/* Bug 3 fix: R² is unitless, only accuracy gets % */}
+                                    {data.is_regression
+                                        ? data.r2_score?.toFixed(3)
+                                        : <>{(data.accuracy * 100).toFixed(1)}<span className="text-2xl text-slate-400 font-bold ml-1">%</span></>}
                                 </div>
                             </div>
 
@@ -122,7 +125,7 @@ export default function ResultDashboard({ data, className = '', viewMode = 'comp
                         </div>
 
                         {/* 2. Charts Row (Split View) */}
-                        <div className="grid grid-cols-2 gap-8 min-h-[400px]">
+                        <div className={`grid ${!data.is_regression && data.confusion_matrix ? 'grid-cols-2' : 'grid-cols-1'} gap-8 min-h-[400px]`}>
                             {/* Feature Importance */}
                             <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col">
                                 <div className="flex items-center justify-between mb-6">
@@ -264,11 +267,19 @@ export default function ResultDashboard({ data, className = '', viewMode = 'comp
                                 <div className="grid grid-cols-3 gap-4 mb-4">
                                     <div className="p-4 bg-slate-50 rounded-xl">
                                         <div className="text-xs font-bold text-slate-400 uppercase mb-1">Train Score</div>
-                                        <div className="text-2xl font-bold text-slate-700">{(data.overfitting_analysis.train_score * 100).toFixed(1)}%</div>
+                                        <div className="text-2xl font-bold text-slate-700">
+                                            {data.is_regression
+                                                ? data.overfitting_analysis.train_score?.toFixed(3)
+                                                : `${(data.overfitting_analysis.train_score * 100).toFixed(1)}%`}
+                                        </div>
                                     </div>
                                     <div className="p-4 bg-slate-50 rounded-xl">
                                         <div className="text-xs font-bold text-slate-400 uppercase mb-1">Test Score</div>
-                                        <div className="text-2xl font-bold text-slate-700">{(data.overfitting_analysis.test_score * 100).toFixed(1)}%</div>
+                                        <div className="text-2xl font-bold text-slate-700">
+                                            {data.is_regression
+                                                ? data.overfitting_analysis.test_score?.toFixed(3)
+                                                : `${(data.overfitting_analysis.test_score * 100).toFixed(1)}%`}
+                                        </div>
                                     </div>
                                     <div className={`p-4 rounded-xl ${data.overfitting_analysis.status === 'good' ? 'bg-green-50' :
                                             data.overfitting_analysis.status === 'moderate' ? 'bg-yellow-50' :
@@ -278,7 +289,11 @@ export default function ResultDashboard({ data, className = '', viewMode = 'comp
                                         <div className={`text-2xl font-bold ${data.overfitting_analysis.status === 'good' ? 'text-green-600' :
                                                 data.overfitting_analysis.status === 'moderate' ? 'text-yellow-600' :
                                                     'text-red-600'
-                                            }`}>{(data.overfitting_analysis.gap * 100).toFixed(1)}%</div>
+                                            }`}>
+                                            {data.is_regression
+                                                ? data.overfitting_analysis.gap?.toFixed(3)
+                                                : `${(data.overfitting_analysis.gap * 100).toFixed(1)}%`}
+                                        </div>
                                     </div>
                                 </div>
                                 <p className="text-sm text-slate-600">{data.overfitting_analysis.message}</p>
@@ -295,18 +310,30 @@ export default function ResultDashboard({ data, className = '', viewMode = 'comp
                                 <div className="grid grid-cols-2 gap-4 mb-4">
                                     <div className="p-4 bg-indigo-50 rounded-xl">
                                         <div className="text-xs font-bold text-indigo-400 uppercase mb-1">Mean Score</div>
-                                        <div className="text-3xl font-bold text-indigo-700">{(data.cross_validation.mean * 100).toFixed(1)}%</div>
+                                        <div className="text-3xl font-bold text-indigo-700">
+                                            {data.is_regression
+                                                ? data.cross_validation.mean?.toFixed(3)
+                                                : `${(data.cross_validation.mean * 100).toFixed(1)}%`}
+                                        </div>
                                     </div>
                                     <div className="p-4 bg-slate-50 rounded-xl">
                                         <div className="text-xs font-bold text-slate-400 uppercase mb-1">Std Deviation</div>
-                                        <div className="text-3xl font-bold text-slate-700">±{(data.cross_validation.std * 100).toFixed(2)}%</div>
+                                        <div className="text-3xl font-bold text-slate-700">
+                                            {data.is_regression
+                                                ? `±${data.cross_validation.std?.toFixed(3)}`
+                                                : `±${(data.cross_validation.std * 100).toFixed(2)}%`}
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="flex gap-2">
                                     {data.cross_validation.scores?.map((score: number, i: number) => (
                                         <div key={i} className="flex-1 p-2 bg-slate-50 rounded-lg text-center">
                                             <div className="text-xs text-slate-400 mb-0.5">Fold {i + 1}</div>
-                                            <div className="text-sm font-bold text-slate-700">{(score * 100).toFixed(1)}%</div>
+                                            <div className="text-sm font-bold text-slate-700">
+                                                {data.is_regression
+                                                    ? score.toFixed(3)
+                                                    : `${(score * 100).toFixed(1)}%`}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -346,20 +373,33 @@ export default function ResultDashboard({ data, className = '', viewMode = 'comp
                                                 {data.is_regression ? 'R² Score' : 'Model Accuracy'}
                                             </span>
                                             <div className="font-bold text-[#34A853] text-5xl">
-                                                {data.is_regression ? data.r2_score?.toFixed(3) : (data.accuracy * 100).toFixed(1)}%
+                                                {/* Bug 3 fix: R² is unitless */}
+                                                {data.is_regression
+                                                    ? data.r2_score?.toFixed(3)
+                                                    : `${(data.accuracy * 100).toFixed(1)}%`}
                                             </div>
                                         </div>
 
                                         {/* Secondary Metrics Grid */}
                                         <div className="grid grid-cols-2 gap-3">
                                             {data.is_regression ? (
-                                                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 h-full flex flex-col justify-center">
-                                                    <div className="flex items-center gap-2 mb-1 text-slate-500">
-                                                        <TrendingUp size={12} />
-                                                        <span className="text-xs font-bold uppercase">Mean Squared Error</span>
-                                                    </div>
-                                                    <span className="text-xl font-bold text-slate-700">{data.mse?.toFixed(4)}</span>
-                                                </div>
+                                                // Bug 7 fix: show MSE, RMSE, MAE, R² Train in compact regression view
+                                                <>
+                                                    {[
+                                                        { label: 'MSE', value: data.mse?.toFixed(4) },
+                                                        { label: 'RMSE', value: data.rmse?.toFixed(4) },
+                                                        { label: 'MAE', value: data.mae?.toFixed(4) },
+                                                        { label: 'Train R²', value: data.train_r2?.toFixed(3) },
+                                                    ].map(({ label, value }) => (
+                                                        <div key={label} className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col justify-center">
+                                                            <div className="flex items-center gap-2 mb-1 text-slate-500">
+                                                                <TrendingUp size={12} />
+                                                                <span className="text-xs font-bold uppercase">{label}</span>
+                                                            </div>
+                                                            <span className="text-xl font-bold text-slate-700">{value ?? 'N/A'}</span>
+                                                        </div>
+                                                    ))}
+                                                </>
                                             ) : (
                                                 <>
                                                     {['Precision', 'Recall', 'F1 Score'].map((metric, i) => {

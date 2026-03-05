@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
 import { Copy, X } from 'lucide-react';
-import StepPreview from './StepPreview';
+
 
 interface DuplicateNodeProps {
     id: string;
@@ -55,7 +55,7 @@ function DuplicateNode({ id, data }: DuplicateNodeProps) {
                     {strategy === 'none' && 'No duplicate handling applied'}
                 </div>
 
-                {data.stepPreview && <StepPreview stepPreview={data.stepPreview} accentColor="#f43f5e" />}
+
             </div>
 
             <Handle type="target" position={Position.Left} className="!bg-rose-500 !w-3 !h-3 !border-2 !border-white" />

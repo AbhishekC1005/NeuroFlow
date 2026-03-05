@@ -1,7 +1,7 @@
 import { memo, useState } from 'react';
 import { Handle, Position } from 'reactflow';
 import axios from 'axios';
-import { Upload, X, Table as TableIcon, ChevronDown, ChevronUp, Loader2, Activity, FileSpreadsheet, Database } from 'lucide-react';
+import { Upload, X, Table as TableIcon, ChevronDown, ChevronUp, Loader2, Activity, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import DatasetAnalysisModal from '../DatasetAnalysisModal';
 
@@ -11,54 +11,10 @@ interface DatasetNodeProps {
     selected?: boolean;
 }
 
-interface DatasetOption {
-    id: string;
-    filename: string;
-    is_sample: boolean;
-    columns: string[];
-    shape: { rows: number; cols: number };
-}
-
 function DatasetNode({ data, id }: DatasetNodeProps) {
     const [showPreview, setShowPreview] = useState(false);
     const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'uploaded'>('idle');
     const [isAnalyzeOpen, setIsAnalyzeOpen] = useState(false);
-    const [availableDatasets, setAvailableDatasets] = useState<DatasetOption[]>([]);
-    const [showDropdown, setShowDropdown] = useState(false);
-    const [isLoadingDatasets, setIsLoadingDatasets] = useState(false);
-
-    const fetchDatasets = async () => {
-        setIsLoadingDatasets(true);
-        try {
-            const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-            const token = localStorage.getItem('token');
-            const response = await axios.get(`${BASE_URL}/datasets`, {
-                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-            });
-            setAvailableDatasets(response.data);
-        } catch (error) {
-            console.error("Failed to fetch datasets", error);
-        } finally {
-            setIsLoadingDatasets(false);
-        }
-    };
-
-    const handleSelectDataset = (dataset: DatasetOption) => {
-        if (data.onChange) {
-            data.onChange(id, {
-                ...data,
-                file: dataset.filename,
-                file_id: dataset.id,
-                columns: dataset.columns,
-                // preview: dataset.preview, // Preview might not be available immediately without fetching. 
-                // We can fetch preview if needed or just rely on columns/shape.
-                preview: [], // Analysis modal fetches real content
-                shape: [dataset.shape.rows, dataset.shape.cols]
-            });
-            setShowDropdown(false);
-            toast.success(`Selected ${dataset.filename}`);
-        }
-    };
 
     const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -83,10 +39,11 @@ function DatasetNode({ data, id }: DatasetNodeProps) {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
             if (data.onChange) {
+                // Bug 1 fix: use dataset_id (MongoDB ObjectId), NOT response.data.id (which is filename)
                 data.onChange(id, {
                     ...data,
                     file: file.name,
-                    file_id: response.data.id,
+                    file_id: response.data.dataset_id || response.data.id,
                     columns: response.data.columns,
                     preview: response.data.preview,
                     shape: response.data.shape
@@ -105,10 +62,6 @@ function DatasetNode({ data, id }: DatasetNodeProps) {
     };
 
 
-    // Derive sample vs user datasets for the dropdown
-    const sampleDatasets = availableDatasets.filter(ds => ds.is_sample);
-    const myDatasets = availableDatasets.filter(ds => !ds.is_sample);
-
     return (
         <>
             <div className="bg-white rounded-2xl shadow-lg border-2 border-blue-200 min-w-[280px] overflow-visible hover:shadow-xl transition-all duration-200">
@@ -125,79 +78,12 @@ function DatasetNode({ data, id }: DatasetNodeProps) {
                     </button>
                 </div>
 
-                <div className="p-4 space-y-3 relative">
-                    {/* Source Selection Toggle */}
+                <div className="p-4 space-y-3">
                     {!data.file && (
-                        <div className="flex gap-2 mb-2">
-                            <button
-                                onClick={() => { setShowDropdown(!showDropdown); if (!showDropdown) fetchDatasets(); }}
-                                className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium rounded-md transition-colors border ${showDropdown
-                                    ? 'bg-blue-50 border-blue-200 text-blue-700'
-                                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-blue-300'
-                                    }`}
-                            >
-                                <Database size={13} />
-                                Select Existing Dataset
-                            </button>
-                        </div>
+                        <p className="text-[10px] text-center text-gray-400 pb-0.5">Drag a dataset from the sidebar, or upload a new file</p>
                     )}
 
-                    {/* Dropdown for Samples */}
-                    {showDropdown && !data.file && (
-                        <div className="absolute top-16 left-4 right-4 z-50 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
-                            {isLoadingDatasets ? (
-                                <div className="p-3 text-center text-xs text-gray-500 flex items-center justify-center gap-2">
-                                    <Loader2 size={12} className="animate-spin" /> Loading...
-                                </div>
-                            ) : (
-                                <div className="p-1">
-                                    {sampleDatasets.length > 0 && (
-                                        <>
-                                            <div className="px-2 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Sample Datasets</div>
-                                            {sampleDatasets.map(ds => (
-                                                <button
-                                                    key={ds.id}
-                                                    onClick={() => handleSelectDataset(ds)}
-                                                    className="w-full text-left px-2 py-1.5 text-xs text-gray-700 hover:bg-blue-50 rounded flex items-center justify-between group"
-                                                >
-                                                    <span className="font-medium">{ds.filename.replace('.csv', '')}</span>
-                                                    <span className="text-[10px] text-gray-400 group-hover:text-blue-500">
-                                                        {ds.shape.rows}x{ds.shape.cols}
-                                                    </span>
-                                                </button>
-                                            ))}
-                                        </>
-                                    )}
-
-                                    {myDatasets.length > 0 && (
-                                        <>
-                                            <div className="mt-2 px-2 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-t border-gray-100">My Uploads</div>
-                                            {myDatasets.map(ds => (
-                                                <button
-                                                    key={ds.id}
-                                                    onClick={() => handleSelectDataset(ds)}
-                                                    className="w-full text-left px-2 py-1.5 text-xs text-gray-700 hover:bg-blue-50 rounded flex items-center justify-between"
-                                                >
-                                                    <span className="truncate max-w-[120px]">{ds.filename}</span>
-                                                    <span className="text-[10px] text-gray-400">
-                                                        {ds.shape.rows}x{ds.shape.cols}
-                                                    </span>
-                                                </button>
-                                            ))}
-                                        </>
-                                    )}
-
-                                    {availableDatasets.length === 0 && (
-                                        <div className="p-2 text-center text-xs text-gray-400">No datasets found</div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Upload Area - Show only if not selecting */}
-                    {!showDropdown && (
-                        <label className={`flex items-center justify-center gap-2 w-full py-2.5 cursor-pointer border border-dashed rounded-lg transition-all text-sm ${uploadStatus === 'uploading'
+                    <label className={`flex items-center justify-center gap-2 w-full py-2.5 cursor-pointer border border-dashed rounded-lg transition-all text-sm ${uploadStatus === 'uploading'
                             ? 'bg-blue-50 border-blue-300 cursor-wait'
                             : uploadStatus === 'uploaded' || data.file
                                 ? 'bg-green-50 border-green-300'
@@ -237,7 +123,6 @@ function DatasetNode({ data, id }: DatasetNodeProps) {
                             )}
                             <input type="file" className="hidden" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} disabled={uploadStatus === 'uploading'} />
                         </label>
-                    )}
 
                     {/* Shape Info */}
                     {data.shape && (

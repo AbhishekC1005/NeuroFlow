@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
 import { Filter, X } from 'lucide-react';
-import StepPreview from './StepPreview';
+
 
 interface FeatureSelectionNodeProps {
     id: string;
@@ -92,7 +92,7 @@ function FeatureSelectionNode({ id, data }: FeatureSelectionNodeProps) {
                     </div>
                 )}
 
-                {data.stepPreview && <StepPreview stepPreview={data.stepPreview} accentColor="#14b8a6" />}
+
             </div>
 
             <Handle type="target" position={Position.Left} className="!bg-teal-500 !w-3 !h-3 !border-2 !border-white" />

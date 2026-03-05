@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
 import { Minimize2, X } from 'lucide-react';
-import StepPreview from './StepPreview';
+
 
 interface PCANodeProps {
     id: string;
@@ -54,7 +54,7 @@ function PCANode({ id, data }: PCANodeProps) {
                     Reduces dimensions to {components} principal component{components > 1 ? 's' : ''}
                 </div>
 
-                {data.stepPreview && <StepPreview stepPreview={data.stepPreview} accentColor="#0ea5e9" />}
+
             </div>
 
             <Handle type="target" position={Position.Left} className="!bg-sky-500 !w-3 !h-3 !border-2 !border-white" />

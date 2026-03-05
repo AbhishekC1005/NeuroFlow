@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
-import { BrainCircuit, X } from 'lucide-react';
-import StepPreview from './StepPreview';
+import { BrainCircuit, X, Lock } from 'lucide-react';
+
 
 interface ModelNodeProps {
     id: string;
@@ -15,6 +15,8 @@ function ModelNode({ id, data }: ModelNodeProps) {
     const onChange = (field: string, value: string) => {
         data.onChange?.(id, { ...data, [field]: value });
     };
+
+    const hasColumns = Array.isArray(data.columns) && data.columns.length > 0;
 
     return (
         <div className="bg-white rounded-2xl shadow-lg border-2 border-red-200 min-w-[240px] overflow-hidden hover:shadow-xl transition-all duration-200">
@@ -37,17 +39,24 @@ function ModelNode({ id, data }: ModelNodeProps) {
                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">
                         Target Column
                     </label>
-                    <select
-                        value={targetColumn}
-                        onChange={(e) => onChange('targetColumn', e.target.value)}
-                        onPointerDownCapture={(e) => e.stopPropagation()}
-                        className="nodrag nopan w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all"
-                    >
-                        <option value="" disabled>Select Target</option>
-                        {data.columns?.map((col: string) => (
-                            <option key={col} value={col}>{col}</option>
-                        ))}
-                    </select>
+                    {hasColumns ? (
+                        <select
+                            value={targetColumn}
+                            onChange={(e) => onChange('targetColumn', e.target.value)}
+                            onPointerDownCapture={(e) => e.stopPropagation()}
+                            className="nodrag nopan w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all"
+                        >
+                            <option value="" disabled>Select target column…</option>
+                            {data.columns.map((col: string) => (
+                                <option key={col} value={col}>{col}</option>
+                            ))}
+                        </select>
+                    ) : (
+                        <div className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg flex items-center gap-2 cursor-not-allowed">
+                            <Lock size={12} className="text-slate-400 shrink-0" />
+                            <span className="text-xs text-slate-400 italic">Connect a Dataset node first</span>
+                        </div>
+                    )}
                 </div>
 
                 {/* Algorithm */}
@@ -73,6 +82,7 @@ function ModelNode({ id, data }: ModelNodeProps) {
                         </optgroup>
                         <optgroup label="Regression">
                             <option value="Linear Regression">Linear Regression</option>
+                            <option value="Decision Tree Regressor">Decision Tree Regressor</option>
                             <option value="Random Forest Regressor">RF Regressor</option>
                             <option value="Ridge Regression">Ridge Regression</option>
                             <option value="Lasso Regression">Lasso Regression</option>
@@ -86,11 +96,13 @@ function ModelNode({ id, data }: ModelNodeProps) {
                     </select>
                 </div>
 
-                <div className="text-xs text-slate-400 italic pt-1">
-                    {targetColumn ? `Predicting: ${targetColumn}` : 'Upload data to select target column'}
-                </div>
+                {targetColumn && (
+                    <div className="text-xs text-slate-400 italic pt-1">
+                        Predicting: {targetColumn}
+                    </div>
+                )}
 
-                {data.stepPreview && <StepPreview stepPreview={data.stepPreview} accentColor="#EA4335" />}
+
             </div>
 
             <Handle type="target" position={Position.Left} className="!bg-red-500 !w-3 !h-3 !border-2 !border-white" />

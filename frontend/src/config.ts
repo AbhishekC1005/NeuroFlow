@@ -15,6 +15,7 @@ export const NODE_COLORS: Record<string, string> = {
     pca: '#0ea5e9',
     featureEngineering: '#84cc16',
     classBalancing: '#d946ef',
+    viewDataset: '#0d9488',
     default: '#64748b'
 };
 

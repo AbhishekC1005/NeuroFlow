@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Routes, Route, useNavigate, Navigate, Link, useLocation } from 'react-router-dom';
+import { Routes, Route, useNavigate, Navigate, Link, useLocation, useParams } from 'react-router-dom';
 import ReactFlow, {
   ReactFlowProvider,
   addEdge,
@@ -14,7 +14,7 @@ import ReactFlow, {
 import type { Connection, Node, Edge } from 'reactflow';
 import 'reactflow/dist/style.css';
 import axios from 'axios';
-import { Play, LayoutGrid, Zap, LogOut, Book, History, FileDown, MousePointer2, Hand, FilePlus, Wand2 } from 'lucide-react';
+import { Play, LayoutGrid, Zap, LogOut, Book, FileDown, MousePointer2, Hand, FilePlus, Wand2, X, RefreshCw, Check, CloudOff, Database, Loader2, FileSpreadsheet, ChevronDown } from 'lucide-react';
 
 import { Toaster, toast } from 'sonner';
 
@@ -25,7 +25,8 @@ import LoginPage from './components/LoginPage';
 import RegisterPage from './components/RegisterPage';
 import DocumentationPage from './components/DocumentationPage';
 import TemplatesPage from './components/TemplatesPage';
-import HistoryPage from './components/HistoryPage';
+
+import WorkspaceDashboard from './components/WorkspaceDashboard';
 import { AuthProvider, useAuth, getAuthHeaders } from './components/AuthContext';
 
 import { downloadNotebook } from './utils/notebookGenerator';
@@ -44,6 +45,7 @@ import CrossValidationNode from './components/nodes/CrossValidationNode';
 import PCANode from './components/nodes/PCANode';
 import FeatureEngineeringNode from './components/nodes/FeatureEngineeringNode';
 import ClassBalancingNode from './components/nodes/ClassBalancingNode';
+import ViewDatasetNode from './components/nodes/ViewDatasetNode';
 
 import logo from './assets/image.png';
 import { API_URL, NODE_COLORS, DEFAULT_EDGE_STYLE } from './config';
@@ -64,6 +66,7 @@ const STATIC_NODE_TYPES = {
   pca: PCANode,
   featureEngineering: FeatureEngineeringNode,
   classBalancing: ClassBalancingNode,
+  viewDataset: ViewDatasetNode,
 };
 
 const initialNodes: Node[] = [
@@ -182,19 +185,35 @@ function Workspace() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-  const nodeTypes = useMemo(() => STATIC_NODE_TYPES, []);
   const defaultEdgeOptions = useMemo(() => ({ animated: true, style: DEFAULT_EDGE_STYLE }), []);
 
-
+  // Bug 2 & 8 fix: keep live refs for edges and nodes to avoid stale closures
+  const edgesRef = useRef(edges);
+  const nodesRef = useRef(nodes);
+  useEffect(() => { edgesRef.current = edges; }, [edges]);
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
 
   const onNodeDataChange = useCallback((id: string, newData: any) => {
     setNodes((nds) => {
       const activeNode = nds.find(n => n.id === id);
-      // Propagate columns to model node if dataset changes
+      // Bug 2 fix: propagate columns ONLY to model nodes connected (downstream) to this dataset
       if (activeNode?.type === 'dataset' && newData.columns && JSON.stringify(newData.columns) !== JSON.stringify(activeNode.data.columns)) {
+        const currentEdges = edgesRef.current;
+        // BFS from this dataset node to find all reachable node ids
+        const reachable = new Set<string>();
+        const queue = [id];
+        while (queue.length > 0) {
+          const curr = queue.shift()!;
+          currentEdges.filter(e => e.source === curr).forEach(e => {
+            if (!reachable.has(e.target)) {
+              reachable.add(e.target);
+              queue.push(e.target);
+            }
+          });
+        }
         return nds.map((node) => {
           if (node.id === id) return { ...node, data: newData };
-          if (node.type === 'model') {
+          if (node.type === 'model' && reachable.has(node.id)) {
             return { ...node, data: { ...node.data, columns: newData.columns } };
           }
           return node;
@@ -211,6 +230,74 @@ function Workspace() {
     setNodes((nds) => nds.filter((node) => node.id !== id));
   }, [setNodes]);
 
+  // ── ViewDataset: on-demand peek callback ───────────────────────────────────
+  const onNodeDataChangeRef = useRef(onNodeDataChange);
+  useEffect(() => { onNodeDataChangeRef.current = onNodeDataChange; }, [onNodeDataChange]);
+
+  const handlePeek = useCallback(async (nodeId: string): Promise<void> => {
+    const currentNodes = nodesRef.current;
+    const currentEdges = edgesRef.current;
+
+    const getParent = (id: string) => {
+      const edge = currentEdges.find(e => e.target === id);
+      if (!edge) return null;
+      return currentNodes.find(n => n.id === edge.source) || null;
+    };
+
+    let cur = getParent(nodeId);
+    let datasetNode: Node | null = null;
+    let imputationNode: Node | null = null;
+    let encodingNode: Node | null = null;
+    let preprocessingNode: Node | null = null;
+    let outlierNode: Node | null = null;
+    let duplicateNode: Node | null = null;
+    let featureSelectionNode: Node | null = null;
+    const activeSteps: string[] = [];
+
+    for (let i = 0; i < 20; i++) {
+      if (!cur) break;
+      if (cur.type === 'dataset') { datasetNode = cur; break; }
+      if (cur.type === 'imputation') { imputationNode = cur; activeSteps.unshift('imputation'); }
+      else if (cur.type === 'encoding') { encodingNode = cur; activeSteps.unshift('encoding'); }
+      else if (cur.type === 'preprocessing') { preprocessingNode = cur; activeSteps.unshift('preprocessing'); }
+      else if (cur.type === 'outlier') { outlierNode = cur; activeSteps.unshift('outlier'); }
+      else if (cur.type === 'duplicate') { duplicateNode = cur; activeSteps.unshift('duplicate'); }
+      else if (cur.type === 'featureSelection') { featureSelectionNode = cur; activeSteps.unshift('featureSelection'); }
+      cur = getParent(cur.id);
+    }
+
+    if (!datasetNode || (!datasetNode.data.file_id && !datasetNode.data.file)) {
+      toast.error('Connect a Dataset node before this View node.');
+      return;
+    }
+
+    const payload = {
+      file_id: datasetNode.data.file_id || datasetNode.data.file,
+      active_steps: activeSteps,
+      duplicate_handling: duplicateNode?.data.duplicateHandling || 'none',
+      outlier_method: outlierNode?.data.outlierMethod || 'none',
+      outlier_action: outlierNode?.data.outlierAction || 'clip',
+      imputer_strategy: imputationNode?.data.strategy || 'none',
+      encoder_strategy: encodingNode?.data.strategy || 'none',
+      scaler_type: preprocessingNode?.data.scaler || 'None',
+      feature_selection_method: featureSelectionNode?.data.featureSelectionMethod || 'none',
+      variance_threshold: featureSelectionNode?.data.varianceThreshold ?? 0.01,
+      correlation_threshold: featureSelectionNode?.data.correlationThreshold ?? 0.95,
+      max_rows: 500,
+    };
+
+    const response = await axios.post(`${API_URL}/preview_until`, payload, {
+      headers: getAuthHeaders()
+    });
+
+    const viewNode = currentNodes.find(n => n.id === nodeId);
+    if (viewNode) {
+      onNodeDataChangeRef.current(nodeId, { ...viewNode.data, previewResult: response.data });
+    }
+  }, []);
+
+  const { id: workspaceId } = useParams<{ id: string }>();
+
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -222,6 +309,43 @@ function Workspace() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [pendingWorkflow, setPendingWorkflow] = useState<any>(null);
   const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [workspaceName, setWorkspaceName] = useState('Untitled Workspace');
+
+  // ── Navbar Datasets Dropdown ─────────────────────────────────────────────
+  type NavDataset = { id: string; filename: string; is_sample: boolean; columns: string[]; shape: { rows: number; cols: number } };
+  const [isDatasetPanelOpen, setIsDatasetPanelOpen] = useState(false);
+  const [navDatasets, setNavDatasets] = useState<NavDataset[]>([]);
+  const [navDatasetsLoading, setNavDatasetsLoading] = useState(false);
+  const [navDatasetsFetched, setNavDatasetsFetched] = useState(false);
+  const datasetPanelRef = useRef<HTMLDivElement>(null);
+
+  const fetchNavDatasets = useCallback(async () => {
+    setNavDatasetsLoading(true);
+    try {
+      const res = await axios.get(`${API_URL}/datasets`, { headers: getAuthHeaders() });
+      setNavDatasets(res.data);
+    } catch { /* ignore */ }
+    finally { setNavDatasetsLoading(false); setNavDatasetsFetched(true); }
+  }, []);
+
+  const handleDatasetPanelToggle = useCallback(() => {
+    setIsDatasetPanelOpen(v => {
+      if (!v && !navDatasetsFetched) fetchNavDatasets();
+      return !v;
+    });
+  }, [navDatasetsFetched, fetchNavDatasets]);
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (datasetPanelRef.current && !datasetPanelRef.current.contains(e.target as globalThis.Node)) {
+        setIsDatasetPanelOpen(false);
+      }
+    };
+    if (isDatasetPanelOpen) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [isDatasetPanelOpen]);
 
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -261,7 +385,8 @@ function Workspace() {
   const location = useLocation();
 
   // Restore Workflow
-  const restoreWorkflow = async (workflowId: string) => {
+  // Bug 8 fix: use nodesRef instead of stale `nodes` closure
+  const restoreWorkflow = useCallback(async (workflowId: string) => {
     try {
       const response = await axios.get(`${API_URL}/workflows`, {
         headers: getAuthHeaders()
@@ -269,8 +394,9 @@ function Workspace() {
       const workflow = response.data.find((w: any) => w.id === workflowId);
 
       if (workflow) {
-        // Check if canvas has content (more than just default)
-        const hasContent = nodes.length > 0 && !(nodes.length === 1 && nodes[0].id === '1');
+        // Check if canvas has content (more than just default) using ref for fresh value
+        const currentNodes = nodesRef.current;
+        const hasContent = currentNodes.length > 0 && !(currentNodes.length === 1 && currentNodes[0].id === '1');
 
         if (hasContent) {
           setPendingWorkflow(workflow);
@@ -287,28 +413,17 @@ function Workspace() {
     } catch (error) {
       toast.error("Failed to restore workflow");
     }
-  };
+  }, [nodesRef]);
 
-  const handleNewWorkspace = () => {
-    if (nodes.length > 0 && !(nodes.length === 1 && nodes[0].id === '1')) {
-      if (window.confirm("Are you sure you want to clear the workspace? Unsaved changes will be lost.")) {
-        setNodes(initialNodes);
-        setEdges([]);
-        setPendingWorkflow(null);
-        toast.success("New workspace created");
-        // Clear autosave
-        localStorage.removeItem('workspace_autosave');
-      }
-    } else {
-      setNodes(initialNodes);
-      setEdges([]);
-      toast.success("New workspace created");
-    }
-  };
+
 
   const handleConfirmReplace = () => {
     if (pendingWorkflow) {
-      setNodes(sanitizeNodes(pendingWorkflow.nodes_json));
+      const hydratedNodes = sanitizeNodes(pendingWorkflow.nodes_json).map((n: Node) => ({
+        ...n,
+        data: { ...n.data, onChange: onNodeDataChange, onDelete: onNodeDelete, onPeek: handlePeek }
+      }));
+      setNodes(hydratedNodes);
       setEdges(pendingWorkflow.edges_json || []);
       toast.success(`Restored workflow: ${pendingWorkflow.name}`);
       setIsRestoreModalOpen(false);
@@ -330,12 +445,17 @@ function Workspace() {
       const newNodes = safePendingNodes.map((node: Node) => {
         const newId = `${node.id}_${timestamp}`;
         idMap[node.id] = newId;
-        return { ...node, id: newId, position: { x: node.position.x, y: node.position.y + yOffset } };
+        return {
+          ...node,
+          id: newId,
+          position: { x: node.position.x, y: node.position.y + yOffset },
+          data: { ...node.data, onChange: onNodeDataChange, onDelete: onNodeDelete, onPeek: handlePeek }
+        };
       });
 
-      const newEdges = (pendingWorkflow.edges_json || []).map((edge: Edge) => ({
+      const newEdges = (pendingWorkflow.edges_json || []).map((edge: Edge, i: number) => ({
         ...edge,
-        id: `${edge.id}_${timestamp}`,
+        id: `${edge.id || `e${i}`}_${timestamp}`,
         source: idMap[edge.source] || edge.source,
         target: idMap[edge.target] || edge.target,
       }));
@@ -352,117 +472,122 @@ function Workspace() {
   useEffect(() => {
     if (location.state && location.state.restoreWorkflowId) {
       restoreWorkflow(location.state.restoreWorkflowId);
-      navigate('/workspace', { replace: true, state: {} });
+      navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [location, navigate]); // Added navigate dependency
+  }, [location, navigate]);
 
-  // Unified Initialization: Autosave + Template
+  // ── Load workspace from backend on mount ─────────────────────────────────
   useEffect(() => {
-    // If restoring from history, skip local logic (handled by another effect)
+    if (!workspaceId) return;
+    // If restoring from history, skip (handled by another effect)
     if (location.state?.restoreWorkflowId) {
       setIsInitialized(true);
       return;
     }
 
-    let currentNodes: Node[] = initialNodes;
-    let currentEdges: Edge[] = [];
-    let hasRestored = false;
-
-    // 1. Always Try Restore Autosave First (Persistence)
-    const autosaveStr = localStorage.getItem('workspace_autosave');
-    if (autosaveStr) {
+    const loadWorkspace = async () => {
       try {
-        const autosave = JSON.parse(autosaveStr);
-        if (Array.isArray(autosave.nodes) && autosave.nodes.length > 0) {
-          currentNodes = sanitizeNodes(autosave.nodes);
-          currentEdges = autosave.edges || [];
-          hasRestored = true;
+        const res = await axios.get(`${API_URL}/workspaces/${workspaceId}`, {
+          headers: getAuthHeaders(),
+        });
+        const { nodes_json, edges_json, name } = res.data;
+        setWorkspaceName(name || 'Untitled Workspace');
+
+        let loadedNodes: Node[] = nodes_json && nodes_json.length > 0
+          ? sanitizeNodes(nodes_json)
+          : initialNodes;
+        let loadedEdges: Edge[] = edges_json || [];
+
+        // Check if a template was passed via navigation state
+        const templateFromState = location.state?.template;
+        if (templateFromState) {
+          try {
+            const template = templateFromState;
+            const hasContent = loadedNodes.length > 0 && loadedNodes[0].id !== '1';
+            if (hasContent) {
+              const yOffset = Math.max(...loadedNodes.map(n => n.position.y)) + 400;
+              const idMap: Record<string, string> = {};
+              const timestamp = Date.now();
+              const safeTemplateNodes = sanitizeNodes(template.nodes);
+              const newNodes = safeTemplateNodes.map((node: Node) => {
+                const newId = `${node.id}_${timestamp}`;
+                idMap[node.id] = newId;
+                return { ...node, id: newId, position: { x: node.position.x, y: node.position.y + yOffset } };
+              });
+              const newEdges = (template.edges || []).map((edge: Edge, i: number) => ({
+                ...edge, id: `${edge.id || `e${i}`}_${timestamp}`,
+                source: idMap[edge.source] || edge.source, target: idMap[edge.target] || edge.target,
+              }));
+              loadedNodes = [...loadedNodes, ...newNodes];
+              loadedEdges = [...loadedEdges, ...newEdges];
+              toast.success(`Appended template: ${template.name}`);
+            } else {
+              loadedNodes = sanitizeNodes(template.nodes || []);
+              loadedEdges = template.edges || [];
+              toast.success(`Loaded template: ${template.name}`);
+            }
+            navigate(location.pathname, { replace: true, state: {} });
+          } catch { toast.error('Failed to load template'); }
         }
-      } catch (e) {
-        console.error("Autosave restore failed", e);
+
+        const hydratedNodes = loadedNodes.map(n => ({
+          ...n,
+          data: { ...n.data, onChange: onNodeDataChange, onDelete: onNodeDelete, onPeek: handlePeek }
+        }));
+        setNodes(hydratedNodes);
+        setEdges(loadedEdges);
+        setIsInitialized(true);
+      } catch {
+        toast.error('Failed to load workspace');
+        navigate('/workspace', { replace: true });
       }
-    }
+    };
+    loadWorkspace();
+  }, [workspaceId, onNodeDataChange, onNodeDelete]);
 
-    // 2. Check for Pending Template (Smart Append)
-    const templateFromState = location.state?.template;
-    if (templateFromState) {
-      try {
-        const template = templateFromState;
-
-        // If we have existing nodes, append intelligently
-        const hasContent = hasRestored || (currentNodes.length > 0 && currentNodes[0].id !== '1');
-
-        if (hasContent) {
-          const yOffset = Math.max(...currentNodes.map(n => n.position.y)) + 400; // More space for templates
-          const idMap: Record<string, string> = {};
-          const timestamp = Date.now();
-          const safeTemplateNodes = sanitizeNodes(template.nodes);
-
-          // Remap Template Nodes
-          const newNodes = safeTemplateNodes.map((node: Node) => {
-            const newId = `${node.id}_${timestamp}`;
-            idMap[node.id] = newId;
-            return {
-              ...node,
-              id: newId,
-              position: {
-                x: node.position.x,
-                y: node.position.y + yOffset
-              }
-            };
-          });
-
-          // Remap Template Edges
-          const newEdges = (template.edges || []).map((edge: Edge) => ({
-            ...edge,
-            id: `${edge.id}_${timestamp}`,
-            source: idMap[edge.source] || edge.source,
-            target: idMap[edge.target] || edge.target,
-          }));
-
-          currentNodes = [...currentNodes, ...newNodes];
-          currentEdges = [...currentEdges, ...newEdges];
-
-          navigate(location.pathname, { replace: true, state: {} });
-          toast.success(`Appended template: ${template.name}`);
-
-        } else {
-          // Overwrite if workspace is empty/default
-          currentNodes = sanitizeNodes(template.nodes || []);
-          currentEdges = template.edges || [];
-          navigate(location.pathname, { replace: true, state: {} });
-          toast.success(`Loaded template: ${template.name}`);
-        }
-      } catch (e) {
-        toast.error("Failed to load template");
-      }
-    }
-
-    // Apply Final State
-    // Apply Final State
-    const hydratedNodes = currentNodes.map(n => ({
-      ...n,
-      data: { ...n.data, onChange: onNodeDataChange, onDelete: onNodeDelete }
-    }));
-    setNodes(hydratedNodes);
-    setEdges(currentEdges);
-    setIsInitialized(true); // Enable autosave
-  }, [onNodeDataChange, onNodeDelete]); // Only run on mount
-
-  // Auto-save Workspace (Writer)
+  // ── Debounced auto-save to backend (5s) ──────────────────────────────────
   useEffect(() => {
-    if (!isInitialized) return;
+    if (!isInitialized || !workspaceId) return;
 
-    if (nodes.length > 0) {
+    const timer = setTimeout(() => {
       const sanitizedNodes = nodes.map(n => {
-        // Strip functions before saving
-        const { onChange, onDelete, ...rest } = n.data;
+        const { onChange, onDelete, onPeek, ...rest } = n.data;
         return { ...n, data: rest };
       });
-      const autosave = { nodes: sanitizedNodes, edges, timestamp: Date.now() };
-      localStorage.setItem('workspace_autosave', JSON.stringify(autosave));
-    }
-  }, [nodes, edges, isInitialized]);
+
+      setSaveStatus('saving');
+      axios.put(
+        `${API_URL}/workspaces/${workspaceId}`,
+        { nodes_json: sanitizedNodes, edges_json: edges },
+        { headers: getAuthHeaders() }
+      ).then(() => {
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+      }).catch(() => {
+        setSaveStatus('error');
+      });
+    }, 10000);
+
+    return () => clearTimeout(timer);
+  }, [nodes, edges, isInitialized, workspaceId]);
+
+  // ── Flush save on tab close ──────────────────────────────────────────────
+  useEffect(() => {
+    if (!workspaceId) return;
+    const handleBeforeUnload = () => {
+      const sanitizedNodes = nodesRef.current.map(n => {
+        const { onChange, onDelete, onPeek, ...rest } = n.data;
+        return { ...n, data: rest };
+      });
+      const payload = JSON.stringify({ nodes_json: sanitizedNodes, edges_json: edgesRef.current });
+      navigator.sendBeacon(
+        `${API_URL}/workspaces/${workspaceId}`,
+        new Blob([payload], { type: 'application/json' })
+      );
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [workspaceId]);
 
   // Auto-fit view on workspace load (center on existing pipeline)
   useEffect(() => {
@@ -550,40 +675,87 @@ function Workspace() {
         return { featureEngineeringMethod: 'polynomial', polynomialDegree: 2 };
       case 'classBalancing':
         return { classBalancing: 'oversample' };
+      case 'viewDataset':
+        return {};
       default:
         return {};
     }
   }, [nodes]);
+
+  const humanizeNodeType = useCallback((type: string): string => {
+    const names: Record<string, string> = {
+      dataset: 'Dataset', imputation: 'Handle Missing', encoding: 'Encode Categories',
+      preprocessing: 'Scale Features', split: 'Train-Test Split', model: 'Model', result: 'Result',
+      outlier: 'Outlier Handler', featureSelection: 'Feature Selection', duplicate: 'Remove Duplicates',
+      crossValidation: 'Cross-Validation', pca: 'PCA', featureEngineering: 'Feature Engineering',
+      classBalancing: 'Class Balancing', viewDataset: 'View Dataset',
+    };
+    return names[type] || type.charAt(0).toUpperCase() + type.slice(1);
+  }, []);
 
   const onDrop = useCallback((event: React.DragEvent) => {
     event.preventDefault();
     const type = event.dataTransfer.getData('application/reactflow');
     if (!type) return;
 
-    const position = reactFlowInstance.project({
-      x: event.clientX - reactFlowWrapper.current!.getBoundingClientRect().left,
-      y: event.clientY - reactFlowWrapper.current!.getBoundingClientRect().top,
-    });
+    // Bug 5 fix: .project() is deprecated in ReactFlow v11+, use screenToFlowPosition
+    const position = reactFlowInstance.screenToFlowPosition
+      ? reactFlowInstance.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+      : reactFlowInstance.project({
+        x: event.clientX - reactFlowWrapper.current!.getBoundingClientRect().left,
+        y: event.clientY - reactFlowWrapper.current!.getBoundingClientRect().top,
+      });
+
+    // Dataset cards in the sidebar carry pre-filled data (file, file_id, columns, shape)
+    const prefillRaw = event.dataTransfer.getData('application/reactflow/dataset-prefill');
+    const prefill = prefillRaw ? JSON.parse(prefillRaw) : {};
+
+    // If dragging a dataset card, try to fill an existing empty dataset node first
+    if (type === 'dataset' && prefill.file) {
+      const emptyDatasetNodes = nodes.filter(n => n.type === 'dataset' && !n.data.file);
+      if (emptyDatasetNodes.length > 0) {
+        // Pick the nearest empty node to the drop position
+        const nearest = emptyDatasetNodes.reduce((best, n) => {
+          const d = Math.hypot(n.position.x - position.x, n.position.y - position.y);
+          const bd = Math.hypot(best.position.x - position.x, best.position.y - position.y);
+          return d < bd ? n : best;
+        });
+        setNodes((nds) =>
+          nds.map((n) =>
+            n.id === nearest.id
+              ? { ...n, data: { ...n.data, ...prefill } }
+              : n
+          )
+        );
+        toast.success(`${prefill.file.replace(/\.(csv|xlsx|xls)$/i, '')} loaded into dataset node`);
+        return;
+      }
+    }
 
     const initialData: any = {
       label: `${type} node`,
       onChange: onNodeDataChange,
       onDelete: onNodeDelete,
+      onPeek: handlePeek,
       ...getNodeDefaults(type),
+      ...prefill,
     };
 
     const newNode: Node = { id: getId(), type, position, data: initialData };
     setNodes((nds) => nds.concat(newNode));
-    toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} node added`);
+    const label = prefill.file
+      ? `${prefill.file.replace(/\.(csv|xlsx|xls)$/i, '')} added`
+      : `${humanizeNodeType(type)} node added`;
+    toast.success(label);
   },
-    [reactFlowInstance, onNodeDataChange, onNodeDelete, setNodes, getNodeDefaults]
+    [reactFlowInstance, nodes, onNodeDataChange, onNodeDelete, handlePeek, setNodes, getNodeDefaults, humanizeNodeType]
   );
 
   useEffect(() => {
     setNodes((nds) =>
       nds.map((node) => {
         if (!node.data.onChange || !node.data.onDelete) {
-          return { ...node, data: { ...node.data, onChange: onNodeDataChange, onDelete: onNodeDelete } };
+          return { ...node, data: { ...node.data, onChange: onNodeDataChange, onDelete: onNodeDelete, onPeek: handlePeek } };
         }
         return node;
       })
@@ -591,27 +763,40 @@ function Workspace() {
   }, [onNodeDataChange, onNodeDelete, setNodes]);
 
   const handleAddNode = useCallback((type: string) => {
-    // Basic auto-layout: Find center of viewport or next to last node
-    const position = reactFlowInstance ? reactFlowInstance.project({
-      x: (window.innerWidth - 320) / 2, // Approximate center
-      y: window.innerHeight / 2
-    }) : { x: 100, y: 100 };
-
-    // Offset based on existing nodes count to avoid overlap
-    position.x += (nodes.length * 20);
-    position.y += (nodes.length * 20);
+    // Bug 5 fix: use screenToFlowPosition instead of deprecated .project()
+    // Bug 10 fix: place new node offset from the rightmost existing node instead of stacking diagonally
+    let position = { x: 100, y: 100 };
+    if (reactFlowInstance) {
+      const currentNodes = nodesRef.current;
+      if (currentNodes.length > 0) {
+        // Place to the right of the rightmost node
+        const maxX = Math.max(...currentNodes.map(n => n.position.x));
+        const rightmostNode = currentNodes.find(n => n.position.x === maxX);
+        position = {
+          x: maxX + 320,
+          y: rightmostNode ? rightmostNode.position.y : 100,
+        };
+      } else {
+        const centerFn = reactFlowInstance.screenToFlowPosition || reactFlowInstance.project;
+        position = centerFn
+          ? centerFn({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
+          : { x: 100, y: 100 };
+      }
+    }
 
     const initialData: any = {
       label: `${type} node`,
       onChange: onNodeDataChange,
       onDelete: onNodeDelete,
+      onPeek: handlePeek,
       ...getNodeDefaults(type),
     };
 
     const newNode: Node = { id: getId(), type, position, data: initialData };
     setNodes((nds) => nds.concat(newNode));
-    toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} node added`);
-  }, [reactFlowInstance, nodes, onNodeDataChange, onNodeDelete, setNodes, getNodeDefaults]);
+    toast.success(`${humanizeNodeType(type)} node added`);
+    // nodesRef replaces `nodes` dep — no stale closure, no unnecessary re-creation
+  }, [reactFlowInstance, nodesRef, onNodeDataChange, onNodeDelete, handlePeek, setNodes, getNodeDefaults, humanizeNodeType]);
 
 
   // Use Custom Hook for Pipeline Logic
@@ -638,11 +823,43 @@ function Workspace() {
           </Link>
         </div>
 
+        {/* Workspace name (editable) + save status */}
+        <div className="flex items-center gap-3 ml-2">
+          <input
+            type="text"
+            value={workspaceName}
+            onChange={(e) => setWorkspaceName(e.target.value)}
+            onBlur={() => {
+              if (workspaceId && workspaceName.trim()) {
+                axios.put(
+                  `${API_URL}/workspaces/${workspaceId}`,
+                  { name: workspaceName.trim(), nodes_json: nodes.map(n => { const { onChange, onDelete, onPeek, ...rest } = n.data; return { ...n, data: rest }; }), edges_json: edges },
+                  { headers: getAuthHeaders() }
+                ).then(() => toast.success('Renamed')).catch(() => toast.error('Rename failed'));
+              }
+            }}
+            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+            className="text-sm font-medium text-gray-700 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-[#4285F4] focus:outline-none transition-colors truncate max-w-[200px] py-0.5 px-1 rounded"
+            title="Click to rename"
+          />
+          <div className="flex items-center gap-1 text-xs">
+            {saveStatus === 'saving' && (
+              <><div className="w-3 h-3 border-[1.5px] border-gray-400 border-t-transparent rounded-full animate-spin" /><span className="text-gray-400">Saving...</span></>
+            )}
+            {saveStatus === 'saved' && (
+              <><Check size={13} className="text-green-500" /><span className="text-green-500">Saved</span></>
+            )}
+            {saveStatus === 'error' && (
+              <><CloudOff size={13} className="text-red-400" /><span className="text-red-400">Save failed</span></>
+            )}
+          </div>
+        </div>
+
         <div className="flex items-center gap-2">
-          <button onClick={handleNewWorkspace} className="flex items-center gap-2 px-4 py-2.5 rounded-full text-gray-600 hover:text-gray-900 hover:bg-gray-100 font-medium transition-all" title="Create new blank workspace">
+          <Link to="/workspace" className="flex items-center gap-2 px-4 py-2.5 rounded-full text-gray-600 hover:text-gray-900 hover:bg-gray-100 font-medium transition-all" title="All workspaces">
             <FilePlus size={18} />
-            <span className="hidden sm:inline text-sm">New</span>
-          </button>
+            <span className="hidden sm:inline text-sm">Workspaces</span>
+          </Link>
 
           <button onClick={() => setIsTemplatesOpen(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-full text-gray-600 hover:text-gray-900 hover:bg-gray-100 font-medium transition-all">
             <LayoutGrid size={18} />
@@ -654,16 +871,117 @@ function Workspace() {
             <span className="hidden sm:inline text-sm">Docs</span>
           </button>
 
-          <Link
-            to="/history"
-            state={{ from: 'workspace' }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-full text-gray-600 hover:text-gray-900 hover:bg-gray-100 font-medium transition-all"
-          >
-            <History size={18} />
-            <span className="hidden sm:inline text-sm">History</span>
-          </Link>
+          {/* ── Datasets Dropdown ── */}
+          <div className="relative" ref={datasetPanelRef}>
+            <button
+              onClick={handleDatasetPanelToggle}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-full font-medium transition-all ${isDatasetPanelOpen
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+            >
+              {navDatasetsLoading
+                ? <Loader2 size={16} className="animate-spin" />
+                : <Database size={16} />}
+              <span className="hidden sm:inline text-sm">Datasets</span>
+              <ChevronDown size={13} className={`transition-transform duration-200 ${isDatasetPanelOpen ? 'rotate-180' : ''}`} />
+            </button>
 
+            {isDatasetPanelOpen && (
+              <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50">
+                {/* Header */}
+                <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">Your Datasets</span>
+                  <button
+                    onClick={() => { fetchNavDatasets(); }}
+                    className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Refresh"
+                  >
+                    <RefreshCw size={12} />
+                  </button>
+                </div>
 
+                <div className="max-h-80 overflow-y-auto p-2">
+                  {navDatasetsLoading ? (
+                    <div className="py-8 flex items-center justify-center gap-2 text-xs text-gray-400">
+                      <Loader2 size={13} className="animate-spin" /> Loading...
+                    </div>
+                  ) : navDatasets.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-gray-400">No datasets yet. Upload a file first.</div>
+                  ) : (
+                    <>
+                      {/* Sample datasets — teal */}
+                      {navDatasets.filter(d => d.is_sample).map(ds => (
+                        <div
+                          key={ds.id}
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('application/reactflow', 'dataset');
+                            e.dataTransfer.setData('application/reactflow/dataset-prefill', JSON.stringify({
+                              file: ds.filename, file_id: ds.id, columns: ds.columns,
+                              shape: [ds.shape.rows, ds.shape.cols], preview: [],
+                            }));
+                            e.dataTransfer.effectAllowed = 'move';
+                          }}
+                          onDragEnd={() => setIsDatasetPanelOpen(false)}
+                          className="group flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-grab active:cursor-grabbing transition-all duration-150 hover:bg-teal-50 border border-transparent hover:border-teal-200 mb-1"
+                        >
+                          <div className="w-7 h-7 rounded-lg bg-teal-50 group-hover:bg-teal-100 flex items-center justify-center shrink-0 transition-colors">
+                            <FileSpreadsheet size={13} className="text-teal-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[12px] font-semibold text-gray-800 truncate">{ds.filename.replace(/\.(csv|xlsx|xls)$/i, '')}</div>
+                            <div className="text-[10px] text-teal-600 font-medium">Sample · {ds.shape.rows.toLocaleString()} × {ds.shape.cols}</div>
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Divider between sample and uploads */}
+                      {navDatasets.some(d => d.is_sample) && navDatasets.some(d => !d.is_sample) && (
+                        <div className="my-1.5 border-t border-gray-100" />
+                      )}
+
+                      {/* User uploads — deduplicated by filename, purple */}
+                      {(() => {
+                        const seen = new Set<string>();
+                        return navDatasets
+                          .filter(d => !d.is_sample)
+                          .filter(d => { if (seen.has(d.filename)) return false; seen.add(d.filename); return true; })
+                          .map(ds => (
+                            <div
+                              key={ds.id}
+                              draggable
+                              onDragStart={(e) => {
+                                e.dataTransfer.setData('application/reactflow', 'dataset');
+                                e.dataTransfer.setData('application/reactflow/dataset-prefill', JSON.stringify({
+                                  file: ds.filename, file_id: ds.id, columns: ds.columns,
+                                  shape: [ds.shape.rows, ds.shape.cols], preview: [],
+                                }));
+                                e.dataTransfer.effectAllowed = 'move';
+                              }}
+                              onDragEnd={() => setIsDatasetPanelOpen(false)}
+                              className="group flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-grab active:cursor-grabbing transition-all duration-150 hover:bg-violet-50 border border-transparent hover:border-violet-200 mb-1"
+                            >
+                              <div className="w-7 h-7 rounded-lg bg-violet-50 group-hover:bg-violet-100 flex items-center justify-center shrink-0 transition-colors">
+                                <FileSpreadsheet size={13} className="text-violet-600" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-[12px] font-semibold text-gray-800 truncate">{ds.filename.replace(/\.(csv|xlsx|xls)$/i, '')}</div>
+                                <div className="text-[10px] text-violet-500 font-medium">My upload · {ds.shape.rows.toLocaleString()} × {ds.shape.cols}</div>
+                              </div>
+                            </div>
+                          ));
+                      })()}
+                    </>
+                  )}
+                </div>
+
+                <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50/60">
+                  <p className="text-[10px] text-gray-400 text-center">Drag any dataset onto the canvas</p>
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="w-px h-6 bg-gray-200 mx-2" />
 
@@ -685,24 +1003,28 @@ function Workspace() {
             )}
           </button>
 
-          {/* Export to Notebook Button - Only enabled when Result node exists */}
-          <button
-            onClick={() => {
-              const hasResultNode = nodes.some(n => n.type === 'result');
-              if (hasResultNode) {
-                downloadNotebook(nodes, edges);
-                toast.success('Notebook exported successfully!');
-              } else {
-                toast.error('Add a Result node to export pipeline');
-              }
-            }}
-            disabled={!nodes.some(n => n.type === 'result')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-full font-medium transition-all ${nodes.some(n => n.type === 'result') ? 'bg-[#34A853] hover:bg-[#2d9248] text-white shadow-md hover:shadow-lg active:scale-95' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
-            title={nodes.some(n => n.type === 'result') ? 'Export to Jupyter Notebook' : 'Add a Result node to enable export'}
-          >
-            <FileDown size={18} />
-            <span className="hidden sm:inline text-sm">Export</span>
-          </button>
+          {/* Export to Notebook Button */}
+          <div className="flex flex-col items-center gap-0.5">
+            <button
+              onClick={() => {
+                const hasResultNode = nodes.some(n => n.type === 'result');
+                if (hasResultNode) {
+                  downloadNotebook(nodes, edges);
+                  toast.success('Notebook exported successfully!');
+                } else {
+                  toast.error('Add a Result node first', { description: 'Connect a Result node to the end of your pipeline to enable export.' });
+                }
+              }}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-full font-medium transition-all ${nodes.some(n => n.type === 'result') ? 'bg-[#34A853] hover:bg-[#2d9248] text-white shadow-md hover:shadow-lg active:scale-95' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+              title={nodes.some(n => n.type === 'result') ? 'Export to Jupyter Notebook' : 'Add a Result node to enable export'}
+            >
+              <FileDown size={18} />
+              <span className="hidden sm:inline text-sm">Export</span>
+            </button>
+            {!nodes.some(n => n.type === 'result') && (
+              <span className="text-[9px] text-gray-400 whitespace-nowrap leading-none">needs Result node</span>
+            )}
+          </div>
 
 
           {user && (
@@ -767,10 +1089,10 @@ function Workspace() {
               onInit={setReactFlowInstance}
               onDrop={onDrop}
               onDragOver={onDragOver}
-              nodeTypes={nodeTypes}
+              nodeTypes={STATIC_NODE_TYPES}
               defaultViewport={{ x: 50, y: 50, zoom: 0.8 }}
               minZoom={0.1}
-              maxZoom={1.5}
+              maxZoom={2.5}
               defaultEdgeOptions={defaultEdgeOptions}
               className="bg-[#F8F9FA]"
               deleteKeyCode={['Backspace', 'Delete']}
@@ -805,7 +1127,9 @@ function Workspace() {
           {/* Chat Panel Area */}
           <div className={`flex flex-col border-l border-gray-200 relative z-10 overflow-visible transition-all duration-200 ease-out bg-white shadow-[-4px_0_24px_-12px_rgba(0,0,0,0.1)]`} style={{ width: isChatOpen ? chatWidth : 0 }}>
             {isChatOpen && (
-              <div className="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-[#4285F4] z-50 transition-colors" onMouseDown={startResizing} />
+              <div className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-[#4285F4]/60 z-50 transition-colors group" onMouseDown={startResizing}>
+                <div className="absolute inset-y-0 left-0.5 w-0.5 bg-gray-200 group-hover:bg-[#4285F4] transition-colors" />
+              </div>
             )}
             <div className="w-full h-full overflow-hidden">
               <ChatPanel
@@ -899,15 +1223,18 @@ function Workspace() {
                       // Ensure we keep the handlers and Propagate Columns
                       data: {
                         ...node.data,
+                        onChange: onNodeDataChange,
+                        onDelete: onNodeDelete,
+                        onPeek: handlePeek,
                         columns: existingDataset?.data.columns || node.data.columns
                       }
                     };
                   });
 
                   // 2. Remap Edges
-                  const remappedEdges = newEdges.map((edge) => ({
+                  const remappedEdges = newEdges.map((edge, i) => ({
                     ...edge,
-                    id: `${edge.id}_${timestamp}`,
+                    id: `${edge.id || `e${i}`}_${timestamp}`,
                     source: idMap[edge.source] || edge.source,
                     target: idMap[edge.target] || edge.target,
                   }));
@@ -931,7 +1258,7 @@ function Workspace() {
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto relative">
               <div className="absolute top-4 right-4 z-50">
                 <button onClick={() => setIsTemplatesOpen(false)} className="p-2 bg-white/80 hover:bg-gray-100 rounded-full transition-colors">
-                  <LogOut className="rotate-180" size={20} />
+                  <X size={20} />
                 </button>
               </div>
               <TemplatesPage
@@ -952,11 +1279,16 @@ function Workspace() {
                       const newNodes = safeTemplateNodes.map((node: Node) => {
                         const newId = `${node.id}_${timestamp}`;
                         idMap[node.id] = newId;
-                        return { ...node, id: newId, position: { x: node.position.x, y: node.position.y + yOffset } };
+                        return {
+                          ...node,
+                          id: newId,
+                          position: { x: node.position.x, y: node.position.y + yOffset },
+                          data: { ...node.data, onChange: onNodeDataChange, onDelete: onNodeDelete, onPeek: handlePeek }
+                        };
                       });
-                      const newEdges = (template.edges || []).map((edge: Edge) => ({
+                      const newEdges = (template.edges || []).map((edge: Edge, i: number) => ({
                         ...edge,
-                        id: `${edge.id}_${timestamp}`,
+                        id: `${edge.id || `e${i}`}_${timestamp}`,
                         source: idMap[edge.source] || edge.source,
                         target: idMap[edge.target] || edge.target,
                       }));
@@ -964,7 +1296,10 @@ function Workspace() {
                       currentEdges = [...currentEdges, ...newEdges];
                       toast.success(`Appended template: ${template.name}`);
                     } else {
-                      currentNodes = sanitizeNodes(template.nodes || []);
+                      currentNodes = sanitizeNodes(template.nodes || []).map((n: Node) => ({
+                        ...n,
+                        data: { ...n.data, onChange: onNodeDataChange, onDelete: onNodeDelete, onPeek: handlePeek }
+                      }));
                       currentEdges = template.edges || [];
                       toast.success(`Loaded template: ${template.name}`);
                     }
@@ -989,7 +1324,7 @@ function Workspace() {
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto relative">
               <div className="absolute top-4 right-4 z-50">
                 <button onClick={() => setIsDocsOpen(false)} className="p-2 bg-white/80 hover:bg-gray-100 rounded-full transition-colors">
-                  <LogOut className="rotate-180" size={20} />
+                  <X size={20} />
                 </button>
               </div>
               <DocumentationPage isModal={true} onClose={() => setIsDocsOpen(false)} />
@@ -1021,7 +1356,7 @@ function Workspace() {
                   onClick={handleConfirmReplace}
                   className="w-full py-3 bg-white border-2 border-red-100 hover:border-red-500 hover:text-red-600 text-gray-700 rounded-lg font-medium transition-all flex items-center justify-center gap-2"
                 >
-                  <LogOut className="rotate-0" size={18} />
+                  <RefreshCw size={18} />
                   Replace Current (Clear Canvas)
                 </button>
 
@@ -1036,6 +1371,8 @@ function Workspace() {
           </div>
         )
       }
+
+
 
       <Toaster position="bottom-center" richColors theme="dark" closeButton />
     </div >
@@ -1064,13 +1401,8 @@ function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/docs" element={<DocumentationPage />} />
         <Route path="/templates" element={<TemplatesPage />} />
-        <Route path="/history" element={
-          <ProtectedRoute>
-            <HistoryPage />
-          </ProtectedRoute>
-        } />
-
-        <Route path="/workspace" element={<ProtectedRoute><Workspace /></ProtectedRoute>} />
+        <Route path="/workspace" element={<ProtectedRoute><WorkspaceDashboard /></ProtectedRoute>} />
+        <Route path="/workspace/:id" element={<ProtectedRoute><Workspace /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AuthProvider>

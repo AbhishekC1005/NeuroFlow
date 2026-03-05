@@ -25,11 +25,14 @@ import cloudinary.uploader
 
 from ml_service import MLService
 from chat_service import ChatService
-from database import users_collection, datasets_collection, workflows_collection, results_collection
+from database import users_collection, datasets_collection, workflows_collection, workspaces_collection
+from pymongo.errors import DuplicateKeyError
 from models import (
-    UserCreate, UserResponse, Token, 
+    UserCreate, UserResponse, Token,
     PipelineRequest, ChatRequest, AnalyzeRequest,
-    WorkflowCreate, WorkflowResponse
+    WorkflowCreate, WorkflowResponse,
+    WorkspaceCreate, WorkspaceUpdate, WorkspaceResponse, WorkspaceDetailResponse,
+    PreviewUntilRequest,
 )
 from auth import (
     get_password_hash, 
@@ -104,15 +107,6 @@ def convert_numpy_types(obj):
 @app.post("/auth/register", response_model=UserResponse)
 def register(user: UserCreate):
     """Register a new user."""
-    # Check if email exists
-    if users_collection.find_one({"email": user.email}):
-        raise HTTPException(status_code=400, detail="Email already registered")
-
-    # Check if username exists
-    if users_collection.find_one({"username": user.username}):
-        raise HTTPException(status_code=400, detail="Username already taken")
-    
-    # Create new user
     hashed_password = get_password_hash(user.password)
     new_user = {
         "email": user.email,
@@ -120,9 +114,14 @@ def register(user: UserCreate):
         "hashed_password": hashed_password,
         "created_at": datetime.now(timezone.utc)
     }
-    result = users_collection.insert_one(new_user)
+    try:
+        result = users_collection.insert_one(new_user)
+    except DuplicateKeyError as e:
+        key = str(e).lower()
+        if "email" in key:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail="Username already taken")
     new_user["id"] = str(result.inserted_id)
-    
     return UserResponse(id=new_user["id"], email=new_user["email"], username=new_user["username"])
 
 
@@ -317,6 +316,119 @@ async def analyze_dataset(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== Protected Workspace Endpoints ====================
+
+@app.post("/workspaces", response_model=WorkspaceDetailResponse)
+def create_workspace(
+    workspace: WorkspaceCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new workspace."""
+    new_workspace = {
+        "user_id": current_user["id"],
+        "name": workspace.name,
+        "nodes_json": [],
+        "edges_json": [],
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
+    result = workspaces_collection.insert_one(new_workspace)
+    return WorkspaceDetailResponse(
+        id=str(result.inserted_id),
+        name=workspace.name,
+        nodes_json=[],
+        edges_json=[],
+        updated_at=new_workspace["updated_at"].isoformat(),
+    )
+
+
+@app.get("/workspaces")
+def list_workspaces(current_user: dict = Depends(get_current_user)):
+    """List all workspaces for current user (summary only)."""
+    cursor = workspaces_collection.find(
+        {"user_id": current_user["id"]}
+    ).sort("updated_at", -1)
+    return [
+        WorkspaceResponse(
+            id=str(w["_id"]),
+            name=w.get("name", "Untitled"),
+            node_count=len(w.get("nodes_json", [])),
+            created_at=w["created_at"].isoformat() if w.get("created_at") else None,
+            updated_at=w["updated_at"].isoformat() if w.get("updated_at") else None,
+        )
+        for w in cursor
+    ]
+
+
+@app.get("/workspaces/{workspace_id}", response_model=WorkspaceDetailResponse)
+def get_workspace(
+    workspace_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get full workspace by ID (owner only)."""
+    try:
+        ws = workspaces_collection.find_one({
+            "_id": ObjectId(workspace_id),
+            "user_id": current_user["id"]
+        })
+    except Exception:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    return WorkspaceDetailResponse(
+        id=str(ws["_id"]),
+        name=ws.get("name", "Untitled"),
+        nodes_json=ws.get("nodes_json", []),
+        edges_json=ws.get("edges_json", []),
+        updated_at=ws["updated_at"].isoformat() if ws.get("updated_at") else None,
+    )
+
+
+@app.put("/workspaces/{workspace_id}")
+def update_workspace(
+    workspace_id: str,
+    update: WorkspaceUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Auto-save workspace (debounced from frontend)."""
+    update_fields: dict = {"updated_at": datetime.now(timezone.utc)}
+    if update.name is not None:
+        update_fields["name"] = update.name
+    if update.nodes_json is not None:
+        update_fields["nodes_json"] = update.nodes_json
+    if update.edges_json is not None:
+        update_fields["edges_json"] = update.edges_json
+
+    try:
+        result = workspaces_collection.update_one(
+            {"_id": ObjectId(workspace_id), "user_id": current_user["id"]},
+            {"$set": update_fields}
+        )
+    except Exception:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    return {"message": "Workspace saved"}
+
+
+@app.delete("/workspaces/{workspace_id}")
+def delete_workspace(
+    workspace_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a workspace (owner only)."""
+    try:
+        result = workspaces_collection.delete_one({
+            "_id": ObjectId(workspace_id),
+            "user_id": current_user["id"]
+        })
+    except Exception:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    return {"message": "Workspace deleted"}
+
+
 # ==================== Protected Workflow Endpoints ====================
 
 @app.get("/workflows")
@@ -418,23 +530,77 @@ async def run_pipeline_batch(
     return batch_results
 
 
-@app.get("/history")
-def get_history(current_user: dict = Depends(get_current_user)):
-    """Get pipeline execution history for the current user."""
-    results = results_collection.find(
-        {"user_id": current_user["id"]}
-    ).sort("created_at", -1)
-    
-    return [
-        {
-            "id": str(r["_id"]),
-            "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
-            "workflow_id": r.get("workflow_id"),
-            "results_summary": r.get("results_json", {}),
-            "workflow_snapshot": r.get("workflow_snapshot")
-        }
-        for r in results
-    ]
+
+
+
+# ==================== ViewDataset: Preview Until Endpoint ====================
+
+@app.post("/preview_until")
+async def preview_until(
+    request: PreviewUntilRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Run pipeline steps up to a ViewDataset node and return the full data snapshot."""
+    try:
+        # Fetch dataset
+        dataset = None
+        try:
+            dataset = datasets_collection.find_one({
+                "_id": ObjectId(request.file_id),
+                "$or": [
+                    {"user_id": current_user["id"]},
+                    {"is_sample": True},
+                    {"user_id": "system"}
+                ]
+            })
+        except Exception:
+            pass
+
+        if not dataset:
+            dataset = datasets_collection.find_one({
+                "filename": request.file_id,
+                "$or": [
+                    {"user_id": current_user["id"]},
+                    {"is_sample": True},
+                    {"user_id": "system"}
+                ]
+            })
+
+        if not dataset:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+
+        # Download file
+        try:
+            response = requests.get(dataset["cloudinary_url"])
+            file_content = response.content
+        except Exception:
+            raise HTTPException(status_code=404, detail="File not found in storage")
+
+        ml_service = MLService()
+        result = ml_service.preview_until(
+            file_content=file_content,
+            filename=dataset["filename"],
+            active_steps=request.active_steps or [],
+            duplicate_handling=request.duplicate_handling or 'none',
+            outlier_method=request.outlier_method or 'none',
+            outlier_action=request.outlier_action or 'clip',
+            imputer_strategy=request.imputer_strategy or 'none',
+            encoder_strategy=request.encoder_strategy or 'none',
+            scaler_type=request.scaler_type or 'None',
+            feature_selection_method=request.feature_selection_method or 'none',
+            variance_threshold=request.variance_threshold or 0.01,
+            correlation_threshold=request.correlation_threshold or 0.95,
+            max_rows=request.max_rows or 500,
+        )
+        return convert_numpy_types(result)
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Preview Until Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/chat")

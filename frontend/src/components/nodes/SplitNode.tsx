@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
 import { Split, X } from 'lucide-react';
-import StepPreview from './StepPreview';
+
 
 interface SplitNodeProps {
     id: string;
@@ -106,7 +106,7 @@ function SplitNode({ id, data }: SplitNodeProps) {
                     Splits data into training and testing sets
                 </div>
 
-                {data.stepPreview && <StepPreview stepPreview={data.stepPreview} accentColor="#d946ef" />}
+
             </div>
 
             <Handle type="target" position={Position.Left} className="!bg-fuchsia-500 !w-3 !h-3 !border-2 !border-white" />
