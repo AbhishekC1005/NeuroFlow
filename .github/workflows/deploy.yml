@@ -40,8 +40,8 @@ jobs:
 
       - name: Check imports work
         env:
-          MONGODB_URI: "mongodb://dummy:27017/test"
-          JWT_SECRET_KEY: "ci-test-secret"
+          MONGODB_URI: "mongodb://localhost:27017/test"
+          SECRET_KEY: "ci-test-secret-key-safe"
           CLOUDINARY_CLOUD_NAME: "dummy"
           CLOUDINARY_API_KEY: "dummy"
           CLOUDINARY_API_SECRET: "dummy"
